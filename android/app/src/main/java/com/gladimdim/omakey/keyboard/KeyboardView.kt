@@ -49,9 +49,12 @@ class KeyboardView(context: Context) : View(context) {
         isHapticFeedbackEnabled = true
     }
 
+    /** Caps Lock as sent from here; kept when the layout changes. */
+    private val locks = KeyboardModel.Locks()
+
     fun setLayout(layout: Layout, sink: KeyboardModel.Sink) {
         model?.cancelAll()
-        model = KeyboardModel(layout, sink)
+        model = KeyboardModel(layout, sink, locks)
         rects = Array(layout.keys.size) { RectF() }
         shapes = arrayOfNulls(layout.keys.size)
         computeGeometry()
@@ -126,6 +129,7 @@ class KeyboardView(context: Context) : View(context) {
             keyPaint.color = when {
                 pressed -> Palette.ACCENT
                 k.layer != null && k.layer == layer -> Palette.ACCENT
+                k.code == KEY_CAPSLOCK && m.capsLock -> Palette.KEY_ACCENT
                 k.style == KeyStyle.ACCENT -> Palette.KEY_ACCENT
                 k.style == KeyStyle.MOD -> Palette.KEY_MOD
                 k.style == KeyStyle.FKEY -> Palette.KEY_FKEY
@@ -146,7 +150,7 @@ class KeyboardView(context: Context) : View(context) {
             drawFitted(canvas, label, r, if (label.length <= 2) 0.4f else 0.24f)
 
             if (layer == null) {
-                k.sub?.let {
+                m.subFor(i)?.let {
                     subPaint.textSize = unit * 0.2f
                     subPaint.color = if (pressed) Palette.BG else Palette.FG_DIM
                     canvas.drawText(it, r.left + unit * 0.1f, r.top + unit * 0.26f, subPaint)
@@ -187,6 +191,10 @@ class KeyboardView(context: Context) : View(context) {
             path.op(one, Path.Op.UNION)
         }
         return path
+    }
+
+    private companion object {
+        const val KEY_CAPSLOCK = 58
     }
 
     private fun drawFitted(canvas: Canvas, text: String, r: RectF, sizeUnits: Float) {

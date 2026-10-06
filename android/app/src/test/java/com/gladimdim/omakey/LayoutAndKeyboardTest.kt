@@ -109,6 +109,50 @@ class LayoutAndKeyboardTest {
     }
 
     @Test
+    fun labelsFollowShiftAndCapsLock() {
+        val m = KeyboardModel(qwerty, object : KeyboardModel.Sink {
+            override fun keyDown(code: Int) {}
+            override fun keyUp(code: Int) {}
+        })
+        val a = key("a"); val one = key("1"); val minus = key("minus"); val shift = key("leftshift")
+        val caps = key("capslock")
+        // Lowercase by default; symbols show their own character with the shifted one in the corner.
+        assertEquals("a", m.labelFor(a)); assertEquals("1", m.labelFor(one)); assertEquals("!", m.subFor(one))
+        // Holding Shift shows what will be sent.
+        m.down(0, shift)
+        assertEquals("A", m.labelFor(a)); assertEquals("!", m.labelFor(one)); assertEquals("_", m.labelFor(minus))
+        assertEquals("1", m.subFor(one))
+        assertEquals("Shift", m.labelFor(shift))
+        m.up(0)
+        assertEquals("a", m.labelFor(a))
+        // Caps Lock uppercases letters only; Shift with Caps Lock gives lowercase letters.
+        m.down(1, caps); m.up(1)
+        assertTrue(m.capsLock)
+        assertEquals("A", m.labelFor(a)); assertEquals("1", m.labelFor(one))
+        m.down(2, shift)
+        assertEquals("a", m.labelFor(a)); assertEquals("!", m.labelFor(one))
+        m.up(2)
+        m.down(3, caps); m.up(3)
+        assertEquals("a", m.labelFor(a))
+        // The Fn layer's labels win while it is held.
+        m.down(4, key("fn"))
+        assertEquals("Mute", m.labelFor(key("f1")))
+    }
+
+    @Test
+    fun capsLockSurvivesALayoutSwitch() {
+        val sink = object : KeyboardModel.Sink {
+            override fun keyDown(code: Int) {}
+            override fun keyUp(code: Int) {}
+        }
+        val locks = KeyboardModel.Locks()
+        val m1 = KeyboardModel(qwerty, sink, locks)
+        m1.down(0, key("capslock")); m1.up(0)
+        val m2 = KeyboardModel(qwerty, sink, locks)
+        assertEquals("A", m2.labelFor(key("a")))
+    }
+
+    @Test
     fun parsesClassicQwerty() {
         assertEquals("classic-qwerty", qwerty.id)
         assertEquals(15f, qwerty.width)

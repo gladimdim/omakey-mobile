@@ -10,10 +10,19 @@ import com.gladimdim.omakey.layout.Layout
  *
  * No allocation on [down]/[up]: the touch path runs on every finger event.
  */
-class KeyboardModel(val layout: Layout, private val sink: Sink) {
+class KeyboardModel(val layout: Layout, private val sink: Sink, private val locks: Locks = Locks()) {
     interface Sink {
         fun keyDown(code: Int)
         fun keyUp(code: Int)
+    }
+
+    /**
+     * Lock state as this phone has sent it; it outlives a layout switch.
+     * The desktop doesn't report its Caps Lock, so a Caps Lock toggled on
+     * another keyboard isn't seen here.
+     */
+    class Locks {
+        var capsLock = false
     }
 
     private val keys = layout.keys
@@ -24,6 +33,21 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
 
     /** How many fingers are on each key, for the pressed highlight. */
     val pressCount = IntArray(keys.size)
+
+    /** Fingers holding a Shift key right now. */
+    private var shiftHeld = 0
+
+    /** Whether labels show what Shift sends: a Shift key is held. */
+    val shifted: Boolean get() = shiftHeld > 0
+
+    val capsLock: Boolean get() = locks.capsLock
+
+    /** For each key, whether it is a letter (its label is the letter its code types). */
+    private val isLetter = BooleanArray(keys.size) { i ->
+        val k = keys[i]
+        k.label.length == 1 && k.label[0] in 'A'..'Z' && k.codeName == "KEY_${k.label}"
+    }
+    private val lowerLabel = Array(keys.size) { i -> if (isLetter[i]) keys[i].label.lowercase() else keys[i].label }
 
     /** The layer of the most recently pressed, still-held layer key. */
     val activeLayer: String? get() = if (layerDepth == 0) null else layerStack[layerDepth - 1]
@@ -60,11 +84,25 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
         return o.code
     }
 
-    /** The label a key shows on the current layer. */
+    /**
+     * The label a key shows: its layer label while a layer is held, otherwise
+     * what it types. Letters are lowercase unless Shift or Caps Lock (but not
+     * both) is on; with Shift held, symbol keys show their shifted character.
+     */
     fun labelFor(index: Int): String {
         val k = keys[index]
-        val layer = activeLayer ?: return k.label
-        return k.layers[layer]?.label ?: k.label
+        val layer = activeLayer
+        if (layer != null) k.layers[layer]?.label?.let { return it }
+        if (isLetter[index]) return if (shifted != capsLock) k.label else lowerLabel[index]
+        if (shifted && k.sub != null) return k.sub
+        return k.label
+    }
+
+    /** The small corner legend: the shifted character, or the plain one while Shift shows the shifted. */
+    fun subFor(index: Int): String? {
+        val k = keys[index]
+        val sub = k.sub ?: return null
+        return if (shifted) k.label else sub
     }
 
     /** Returns true when the view should redraw. */
@@ -80,6 +118,8 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
         } else {
             val code = codeFor(keyIndex)
             pointerCode[pointerId] = code
+            if (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT) shiftHeld++
+            if (code == KEY_CAPSLOCK) locks.capsLock = !locks.capsLock
             if (code != 0) sink.keyDown(code)
         }
         return true
@@ -97,6 +137,7 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
         } else {
             val code = pointerCode[pointerId]
             pointerCode[pointerId] = 0
+            if (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT) shiftHeld--
             if (code != 0) sink.keyUp(code)
         }
         return true
@@ -121,5 +162,8 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
 
     companion object {
         const val MAX_POINTERS = 32
+        private const val KEY_LEFTSHIFT = 42
+        private const val KEY_RIGHTSHIFT = 54
+        private const val KEY_CAPSLOCK = 58
     }
 }
