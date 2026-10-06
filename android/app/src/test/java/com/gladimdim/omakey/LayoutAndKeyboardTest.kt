@@ -40,7 +40,7 @@ class LayoutAndKeyboardTest {
         val ctrl = split.keys.first { it.id == "center-ctrl" }
         // Modifiers and Enter exist only in the centre cluster.
         val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
-        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-super", "center-alt"),
+        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-super", "center-alt", "center-altgr"),
             split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
         // Enter, Shift and Ctrl are the biggest keys there.
         val centre = split.keys.filter { it.x >= shift.x && it.x < enter.x + enter.w }
@@ -49,10 +49,13 @@ class LayoutAndKeyboardTest {
         assertTrue(centre.filter { it !in big }.all { it.w * it.h < smallestBig })
         // Letters are square.
         assertTrue(split.keys.filter { it.label.length == 1 && it.label[0].isLetter() }.all { it.w == 1f && it.h == 1f })
-        // T is on the left of the centre cluster, Y on the right.
-        val t = split.keys.first { it.id == "t" }
-        val y = split.keys.first { it.id == "y" }
-        assertTrue(t.x + t.w <= shift.x && y.x >= enter.x + enter.w)
+        // Letters touch the outer edges; T is left of the centre, Y right of it.
+        fun k(id: String) = split.keys.first { it.id == id }
+        for (id in listOf("q", "a", "z")) assertEquals(0f, k(id).x)
+        for (id in listOf("p", "semicolon", "slash")) assertEquals(split.width, k(id).x + k(id).w, 1e-4f)
+        assertTrue(k("t").x + k("t").w <= shift.x && k("y").x >= enter.x + enter.w)
+        // Tab and Caps are in the centre too.
+        for (id in listOf("tab", "capslock")) assertTrue(k(id).x >= shift.x && k(id).x < enter.x + enter.w)
     }
 
     @Test
