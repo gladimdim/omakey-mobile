@@ -1,7 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// Signing comes from the gitignored keystore.properties (see
+// keystore.properties.example) or OMAKEY_STORE_* environment variables,
+// never from this file. Without either, debug builds use the SDK's default
+// debug key and release builds are left unsigned.
+val signingProps = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun signingValue(key: String, env: String): String? = signingProps.getProperty(key) ?: System.getenv(env)
+val storePath = signingValue("storeFile", "OMAKEY_STORE_FILE")
 
 android {
     namespace = "com.gladimdim.omakey"
@@ -15,9 +27,25 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        if (storePath != null) {
+            create("omakey") {
+                storeFile = file(storePath.replaceFirst("~", System.getProperty("user.home")))
+                storePassword = signingValue("storePassword", "OMAKEY_STORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "OMAKEY_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "OMAKEY_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        val omakeySigning = signingConfigs.findByName("omakey")
+        debug {
+            if (omakeySigning != null) signingConfig = omakeySigning
+        }
         release {
             isMinifyEnabled = false
+            if (omakeySigning != null) signingConfig = omakeySigning
         }
     }
 
