@@ -4,9 +4,10 @@
  "id": "split-qwerty",
  "name": "Split QWERTY",
  "author": "Omakey",
- "description": "Column-based QWERTY split for two thumbs: letters on the outer edges with a space bar under each half, and everything else in the centre: Tab, Caps, Esc, navigation, and big Shift, Enter, Ctrl and Backspace with Fn, Super and Alt.",
- "width": 17.5,
+ "description": "Column-based QWERTY split for two thumbs: letters on the outer edges with a space bar under each half, and an island beside each half: Tab, Caps, big Shift and Ctrl on the left; arrows, big Enter and Backspace on the right. The halves move to the screen edges.",
+ "width": 18.9,
  "height": 6.1,
+ "splitAt": 9.7,
  "keys": [
   {
    "id": "f1",
@@ -285,7 +286,7 @@
   },
   {
    "id": "f7",
-   "x": 11.5,
+   "x": 12.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -301,7 +302,7 @@
   },
   {
    "id": "f8",
-   "x": 12.5,
+   "x": 13.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -317,7 +318,7 @@
   },
   {
    "id": "f9",
-   "x": 13.5,
+   "x": 14.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -333,7 +334,7 @@
   },
   {
    "id": "f10",
-   "x": 14.5,
+   "x": 15.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -349,7 +350,7 @@
   },
   {
    "id": "f11",
-   "x": 15.5,
+   "x": 16.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -359,7 +360,7 @@
   },
   {
    "id": "f12",
-   "x": 16.5,
+   "x": 17.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -369,7 +370,7 @@
   },
   {
    "id": "minus",
-   "x": 11.5,
+   "x": 12.9,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -379,7 +380,7 @@
   },
   {
    "id": "leftbrace",
-   "x": 11.5,
+   "x": 12.9,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -389,7 +390,7 @@
   },
   {
    "id": "apostrophe",
-   "x": 11.5,
+   "x": 12.9,
    "y": 2.85,
    "w": 1,
    "h": 1.0,
@@ -399,7 +400,7 @@
   },
   {
    "id": "rightbrace",
-   "x": 11.5,
+   "x": 12.9,
    "y": 3.85,
    "w": 1,
    "h": 1.0,
@@ -409,7 +410,7 @@
   },
   {
    "id": "backslash",
-   "x": 11.5,
+   "x": 12.9,
    "y": 4.85,
    "w": 1,
    "h": 1.25,
@@ -419,7 +420,7 @@
   },
   {
    "id": "6",
-   "x": 12.5,
+   "x": 13.9,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -429,7 +430,7 @@
   },
   {
    "id": "7",
-   "x": 13.5,
+   "x": 14.9,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -439,7 +440,7 @@
   },
   {
    "id": "8",
-   "x": 14.5,
+   "x": 15.9,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -449,7 +450,7 @@
   },
   {
    "id": "9",
-   "x": 15.5,
+   "x": 16.9,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -459,7 +460,7 @@
   },
   {
    "id": "0",
-   "x": 16.5,
+   "x": 17.9,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -469,7 +470,7 @@
   },
   {
    "id": "y",
-   "x": 12.5,
+   "x": 13.9,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -478,7 +479,7 @@
   },
   {
    "id": "u",
-   "x": 13.5,
+   "x": 14.9,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -487,7 +488,7 @@
   },
   {
    "id": "i",
-   "x": 14.5,
+   "x": 15.9,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -496,7 +497,7 @@
   },
   {
    "id": "o",
-   "x": 15.5,
+   "x": 16.9,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -505,7 +506,7 @@
   },
   {
    "id": "p",
-   "x": 16.5,
+   "x": 17.9,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -514,7 +515,7 @@
   },
   {
    "id": "h",
-   "x": 12.5,
+   "x": 13.9,
    "y": 2.85,
    "w": 1,
    "h": 1.0,
@@ -523,7 +524,7 @@
   },
   {
    "id": "j",
-   "x": 13.5,
+   "x": 14.9,
    "y": 2.85,
    "w": 1,
    "h": 1.0,
@@ -532,7 +533,7 @@
   },
   {
    "id": "k",
-   "x": 14.5,
+   "x": 15.9,
    "y": 2.85,
    "w": 1,
    "h": 1.0,
@@ -541,7 +542,7 @@
   },
   {
    "id": "l",
-   "x": 15.5,
+   "x": 16.9,
    "y": 2.85,
    "w": 1,
    "h": 1.0,
@@ -550,7 +551,7 @@
   },
   {
    "id": "semicolon",
-   "x": 16.5,
+   "x": 17.9,
    "y": 2.85,
    "w": 1,
    "h": 1.0,
@@ -560,7 +561,7 @@
   },
   {
    "id": "n",
-   "x": 12.5,
+   "x": 13.9,
    "y": 3.85,
    "w": 1,
    "h": 1.0,
@@ -569,7 +570,7 @@
   },
   {
    "id": "m",
-   "x": 13.5,
+   "x": 14.9,
    "y": 3.85,
    "w": 1,
    "h": 1.0,
@@ -578,7 +579,7 @@
   },
   {
    "id": "comma",
-   "x": 14.5,
+   "x": 15.9,
    "y": 3.85,
    "w": 1,
    "h": 1.0,
@@ -588,7 +589,7 @@
   },
   {
    "id": "dot",
-   "x": 15.5,
+   "x": 16.9,
    "y": 3.85,
    "w": 1,
    "h": 1.0,
@@ -598,7 +599,7 @@
   },
   {
    "id": "slash",
-   "x": 16.5,
+   "x": 17.9,
    "y": 3.85,
    "w": 1,
    "h": 1.0,
@@ -608,7 +609,7 @@
   },
   {
    "id": "space-right",
-   "x": 12.5,
+   "x": 13.9,
    "y": 4.85,
    "w": 5,
    "h": 1.25,
@@ -618,7 +619,7 @@
   },
   {
    "id": "f6",
-   "x": 5.25,
+   "x": 5.2,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -634,7 +635,7 @@
   },
   {
    "id": "esc",
-   "x": 6.25,
+   "x": 6.2,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -644,7 +645,7 @@
   },
   {
    "id": "sysrq",
-   "x": 7.25,
+   "x": 7.2,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -653,38 +654,8 @@
    "style": "mod"
   },
   {
-   "id": "insert",
-   "x": 8.25,
-   "y": 0.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "Ins",
-   "code": "KEY_INSERT",
-   "style": "mod"
-  },
-  {
-   "id": "delete",
-   "x": 9.25,
-   "y": 0.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "Del",
-   "code": "KEY_DELETE",
-   "style": "mod"
-  },
-  {
-   "id": "compose",
-   "x": 10.25,
-   "y": 0.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "Menu",
-   "code": "KEY_COMPOSE",
-   "style": "mod"
-  },
-  {
    "id": "grave",
-   "x": 5.25,
+   "x": 5.2,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -694,7 +665,7 @@
   },
   {
    "id": "tab",
-   "x": 6.25,
+   "x": 6.2,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -703,38 +674,8 @@
    "style": "mod"
   },
   {
-   "id": "home",
-   "x": 7.25,
-   "y": 0.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "Home",
-   "code": "KEY_HOME",
-   "style": "mod"
-  },
-  {
-   "id": "up",
-   "x": 8.25,
-   "y": 0.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "↑",
-   "code": "KEY_UP",
-   "style": "mod"
-  },
-  {
-   "id": "end",
-   "x": 9.25,
-   "y": 0.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "End",
-   "code": "KEY_END",
-   "style": "mod"
-  },
-  {
    "id": "pageup",
-   "x": 10.25,
+   "x": 7.2,
    "y": 0.85,
    "w": 1,
    "h": 1.0,
@@ -744,7 +685,7 @@
   },
   {
    "id": "equal",
-   "x": 5.25,
+   "x": 5.2,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -754,7 +695,7 @@
   },
   {
    "id": "capslock",
-   "x": 6.25,
+   "x": 6.2,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -763,8 +704,118 @@
    "style": "mod"
   },
   {
+   "id": "pagedown",
+   "x": 7.2,
+   "y": 1.85,
+   "w": 1,
+   "h": 1.0,
+   "label": "PgDn",
+   "code": "KEY_PAGEDOWN",
+   "style": "mod"
+  },
+  {
+   "id": "fn",
+   "x": 5.2,
+   "y": 2.85,
+   "w": 1,
+   "h": 1.0,
+   "label": "Fn",
+   "layer": "fn",
+   "style": "mod"
+  },
+  {
+   "id": "center-shift",
+   "x": 6.2,
+   "y": 2.85,
+   "w": 2,
+   "h": 2.0,
+   "label": "Shift",
+   "code": "KEY_LEFTSHIFT",
+   "style": "mod"
+  },
+  {
+   "id": "center-super",
+   "x": 5.2,
+   "y": 3.85,
+   "w": 1,
+   "h": 1.0,
+   "label": "Super",
+   "code": "KEY_LEFTMETA",
+   "style": "mod"
+  },
+  {
+   "id": "center-ctrl",
+   "x": 5.2,
+   "y": 4.85,
+   "w": 3,
+   "h": 1.25,
+   "label": "Ctrl",
+   "code": "KEY_LEFTCTRL",
+   "style": "mod"
+  },
+  {
+   "id": "insert",
+   "x": 9.7,
+   "y": 0.0,
+   "w": 1,
+   "h": 0.85,
+   "label": "Ins",
+   "code": "KEY_INSERT",
+   "style": "mod"
+  },
+  {
+   "id": "delete",
+   "x": 10.7,
+   "y": 0.0,
+   "w": 1,
+   "h": 0.85,
+   "label": "Del",
+   "code": "KEY_DELETE",
+   "style": "mod"
+  },
+  {
+   "id": "compose",
+   "x": 11.7,
+   "y": 0.0,
+   "w": 1,
+   "h": 0.85,
+   "label": "Menu",
+   "code": "KEY_COMPOSE",
+   "style": "mod"
+  },
+  {
+   "id": "home",
+   "x": 9.7,
+   "y": 0.85,
+   "w": 1,
+   "h": 1.0,
+   "label": "Home",
+   "code": "KEY_HOME",
+   "style": "mod"
+  },
+  {
+   "id": "up",
+   "x": 10.7,
+   "y": 0.85,
+   "w": 1,
+   "h": 1.0,
+   "label": "↑",
+   "code": "KEY_UP",
+   "style": "mod"
+  },
+  {
+   "id": "end",
+   "x": 11.7,
+   "y": 0.85,
+   "w": 1,
+   "h": 1.0,
+   "label": "End",
+   "code": "KEY_END",
+   "style": "mod"
+  },
+  {
    "id": "left",
-   "x": 7.25,
+   "x": 9.7,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -774,7 +825,7 @@
   },
   {
    "id": "down",
-   "x": 8.25,
+   "x": 10.7,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -784,7 +835,7 @@
   },
   {
    "id": "right",
-   "x": 9.25,
+   "x": 11.7,
    "y": 1.85,
    "w": 1,
    "h": 1.0,
@@ -793,50 +844,10 @@
    "style": "mod"
   },
   {
-   "id": "pagedown",
-   "x": 10.25,
-   "y": 1.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "PgDn",
-   "code": "KEY_PAGEDOWN",
-   "style": "mod"
-  },
-  {
-   "id": "center-shift",
-   "x": 5.25,
-   "y": 2.85,
-   "w": 2,
-   "h": 2.0,
-   "label": "Shift",
-   "code": "KEY_LEFTSHIFT",
-   "style": "mod"
-  },
-  {
-   "id": "fn",
-   "x": 7.25,
-   "y": 2.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "Fn",
-   "layer": "fn",
-   "style": "mod"
-  },
-  {
-   "id": "center-super",
-   "x": 8.25,
-   "y": 2.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "Super",
-   "code": "KEY_LEFTMETA",
-   "style": "mod"
-  },
-  {
    "id": "center-enter",
-   "x": 9.25,
+   "x": 9.7,
    "y": 2.85,
-   "w": 2,
+   "w": 3,
    "h": 2.0,
    "label": "Enter",
    "code": "KEY_ENTER",
@@ -844,37 +855,23 @@
   },
   {
    "id": "center-alt",
-   "x": 7.25,
-   "y": 3.85,
+   "x": 9.7,
+   "y": 4.85,
    "w": 1,
-   "h": 1.0,
+   "h": 1.25,
    "label": "Alt",
    "code": "KEY_LEFTALT",
-   "style": "mod"
-  },
-  {
-   "id": "center-altgr",
-   "x": 8.25,
-   "y": 3.85,
-   "w": 1,
-   "h": 1.0,
-   "label": "AltGr",
-   "code": "KEY_RIGHTALT",
-   "style": "mod"
-  },
-  {
-   "id": "center-ctrl",
-   "x": 5.25,
-   "y": 4.85,
-   "w": 4,
-   "h": 1.25,
-   "label": "Ctrl",
-   "code": "KEY_LEFTCTRL",
+   "layers": {
+    "fn": {
+     "code": "KEY_RIGHTALT",
+     "label": "AltGr"
+    }
+   },
    "style": "mod"
   },
   {
    "id": "center-backspace",
-   "x": 9.25,
+   "x": 10.7,
    "y": 4.85,
    "w": 2,
    "h": 1.25,

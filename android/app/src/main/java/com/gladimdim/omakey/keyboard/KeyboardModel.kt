@@ -28,6 +28,17 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
     /** The layer of the most recently pressed, still-held layer key. */
     val activeLayer: String? get() = if (layerDepth == 0) null else layerStack[layerDepth - 1]
 
+    /**
+     * Like [hitTest], for a split layout drawn with its right side moved
+     * [stretch] units to the right: touches in the widened gap hit nothing.
+     */
+    fun hitTestStretched(ux: Float, uy: Float, stretch: Float): Int {
+        val split = layout.splitAt
+        if (split == null || stretch <= 0f || ux < split) return hitTest(ux, uy)
+        if (ux < split + stretch) return -1
+        return hitTest(ux - stretch, uy)
+    }
+
     /** Index of the key at layout-unit coordinates, or -1. Keys drawn later win. */
     fun hitTest(ux: Float, uy: Float): Int {
         for (i in keys.indices.reversed()) {

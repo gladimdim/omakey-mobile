@@ -22,6 +22,8 @@ class KeyboardView(context: Context) : View(context) {
     private var rects: Array<RectF> = emptyArray()
     private var unit = 1f
     private var originX = 0f
+    /** Units the right side of a split layout is moved right by. */
+    private var stretch = 0f
     private var originY = 0f
 
     private val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -69,13 +71,19 @@ class KeyboardView(context: Context) : View(context) {
         val availH = height - pad * 2
         if (availW <= 0 || availH <= 0) return
         unit = minOf(availW / l.width, availH / l.height)
-        originX = (width - unit * l.width) / 2
+        val slack = availW - unit * l.width
+        val split = l.splitAt
+        // A split layout keeps each side against its screen edge: the spare
+        // width goes into the split instead of the margins.
+        stretch = if (split != null && slack > 0f) slack / unit else 0f
+        originX = if (stretch > 0f) pad else (width - unit * l.width) / 2
         originY = (height - unit * l.height) / 2
         val gap = unit * 0.05f
         l.keys.forEachIndexed { i, k ->
+            val dx = if (split != null && k.x >= split) stretch else 0f
             rects[i].set(
-                originX + k.x * unit + gap, originY + k.y * unit + gap,
-                originX + (k.x + k.w) * unit - gap, originY + (k.y + k.h) * unit - gap,
+                originX + (k.x + dx) * unit + gap, originY + k.y * unit + gap,
+                originX + (k.x + dx + k.w) * unit - gap, originY + (k.y + k.h) * unit - gap,
             )
         }
     }
@@ -85,7 +93,7 @@ class KeyboardView(context: Context) : View(context) {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val i = ev.actionIndex
-                val key = m.hitTest((ev.getX(i) - originX) / unit, (ev.getY(i) - originY) / unit)
+                val key = m.hitTestStretched((ev.getX(i) - originX) / unit, (ev.getY(i) - originY) / unit, stretch)
                 if (m.down(ev.getPointerId(i), key)) {
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     invalidate()

@@ -7,6 +7,7 @@
  "description": "The Alice: a staggered split with B on both halves, two space bars and a macro column. Hold Fn for F1-F12, IJKL arrows and Delete.",
  "width": 18.25,
  "height": 5,
+ "splitAt": 9.5,
  "keys": [
   {
    "id": "esc",
@@ -473,7 +474,7 @@
   },
   {
    "id": "h",
-   "x": 10,
+   "x": 10.0,
    "y": 2,
    "w": 1,
    "h": 1,
@@ -482,7 +483,7 @@
   },
   {
    "id": "j",
-   "x": 11,
+   "x": 11.0,
    "y": 2,
    "w": 1,
    "h": 1,
@@ -497,7 +498,7 @@
   },
   {
    "id": "k",
-   "x": 12,
+   "x": 12.0,
    "y": 2,
    "w": 1,
    "h": 1,
@@ -512,7 +513,7 @@
   },
   {
    "id": "l",
-   "x": 13,
+   "x": 13.0,
    "y": 2,
    "w": 1,
    "h": 1,
@@ -527,7 +528,7 @@
   },
   {
    "id": "semicolon",
-   "x": 14,
+   "x": 14.0,
    "y": 2,
    "w": 1,
    "h": 1,
@@ -537,7 +538,7 @@
   },
   {
    "id": "apostrophe",
-   "x": 15,
+   "x": 15.0,
    "y": 2,
    "w": 1,
    "h": 1,
@@ -547,7 +548,7 @@
   },
   {
    "id": "enter",
-   "x": 16,
+   "x": 16.0,
    "y": 2,
    "w": 2.25,
    "h": 1,

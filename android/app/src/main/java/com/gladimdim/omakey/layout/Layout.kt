@@ -56,6 +56,11 @@ class Layout(
     val keys: List<LayoutKey>,
     /** The original JSON, so imports can be saved as-is. */
     val source: String,
+    /**
+     * Split point in units, or null. Keys with x >= splitAt are the right
+     * side; the view pins each side to its screen edge.
+     */
+    val splitAt: Float? = null,
 )
 
 class LayoutException(message: String) : Exception(message)
@@ -88,6 +93,8 @@ object LayoutParser {
             val width = root.getDouble("width").toFloat()
             val height = root.getDouble("height").toFloat()
             if (!(width > 0 && width <= 64 && height > 0 && height <= 32)) throw LayoutException("Bad layout size")
+            val splitAt = if (root.has("splitAt")) root.getDouble("splitAt").toFloat() else null
+            if (splitAt != null && !(splitAt > 0 && splitAt < width)) throw LayoutException("splitAt must be inside the layout")
 
             val arr: JSONArray = root.getJSONArray("keys")
             if (arr.length() == 0) throw LayoutException("Layout has no keys")
@@ -97,7 +104,7 @@ object LayoutParser {
             val keys = List(arr.length()) { i -> parseKey(arr.getJSONObject(i), keycodes, ids) }
             return Layout(
                 id, name, root.optStringOrNull("author"), root.optStringOrNull("description"),
-                width, height, keys, json,
+                width, height, keys, json, splitAt,
             )
         } catch (e: JSONException) {
             throw LayoutException("Layout is missing a field: ${e.message}")

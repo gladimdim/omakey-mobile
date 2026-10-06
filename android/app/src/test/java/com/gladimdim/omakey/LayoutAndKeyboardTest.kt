@@ -40,7 +40,7 @@ class LayoutAndKeyboardTest {
         val ctrl = split.keys.first { it.id == "center-ctrl" }
         // Modifiers and Enter exist only in the centre cluster.
         val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
-        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-super", "center-alt", "center-altgr"),
+        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-super", "center-alt"),
             split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
         // Enter, Shift and Ctrl are the biggest keys there.
         val centre = split.keys.filter { it.x >= shift.x && it.x < enter.x + enter.w }
@@ -56,6 +56,33 @@ class LayoutAndKeyboardTest {
         assertTrue(k("t").x + k("t").w <= shift.x && k("y").x >= enter.x + enter.w)
         // Tab and Caps are in the centre too.
         for (id in listOf("tab", "capslock")) assertTrue(k(id).x >= shift.x && k(id).x < enter.x + enter.w)
+    }
+
+    @Test
+    fun splitLayoutsStretchTheirGapAndHitTestAcrossIt() {
+        val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
+        val at = split.splitAt!!
+        assertTrue(at > 0 && at < split.width)
+        assertTrue(split.keys.none { it.x < at && it.x + it.w > at + 1e-4f })
+        val m = KeyboardModel(split, object : KeyboardModel.Sink {
+            override fun keyDown(code: Int) {}
+            override fun keyUp(code: Int) {}
+        })
+        val enter = split.keys.indexOfFirst { it.id == "center-enter" }
+        val shift = split.keys.indexOfFirst { it.id == "center-shift" }
+        val e = split.keys[enter]
+        val sh = split.keys[shift]
+        val stretch = 3f
+        // The right side moved 3 units right; the left side stayed.
+        assertEquals(enter, m.hitTestStretched(e.x + stretch + 0.5f, e.y + 0.5f, stretch))
+        assertEquals(shift, m.hitTestStretched(sh.x + 0.5f, sh.y + 0.5f, stretch))
+        // Touches in the widened gap hit nothing; no stretch behaves like hitTest.
+        assertEquals(-1, m.hitTestStretched(at + 1f, e.y + 0.5f, stretch))
+        assertEquals(enter, m.hitTestStretched(e.x + 0.5f, e.y + 0.5f, 0f))
+        // Every bundled split board declares its split.
+        for (id in listOf("corne", "ferris-sweep", "lily58", "ergodox", "kinesis-advantage", "alice", "split-qwerty")) {
+            assertTrue(id, LayoutParser.parse(File(assets, "layouts/$id.json").readText(), keycodes).splitAt != null)
+        }
     }
 
     @Test
