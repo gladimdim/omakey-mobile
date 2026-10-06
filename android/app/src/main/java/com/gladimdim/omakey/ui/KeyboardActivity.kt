@@ -1,6 +1,8 @@
 package com.gladimdim.omakey.ui
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
@@ -15,6 +17,7 @@ import android.widget.TextView
 import com.gladimdim.omakey.keyboard.KeyboardModel
 import com.gladimdim.omakey.keyboard.KeyboardView
 import com.gladimdim.omakey.net.Discovery
+import com.gladimdim.omakey.net.Found
 import com.gladimdim.omakey.net.KeyboardLink
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
@@ -24,6 +27,7 @@ import com.gladimdim.omakey.store.LayoutStore
 /**
  * The keyboard: landscape, fullscreen, screen kept on. While it is visible
  * it holds a low-latency Wi-Fi lock and a live session with the computer.
+ * The computer can be switched from here without leaving the keyboard.
  */
 class KeyboardActivity : Activity() {
     private lateinit var host: HostRecord
@@ -35,6 +39,7 @@ class KeyboardActivity : Activity() {
     private val keys = KeyState()
     private var link: KeyboardLink? = null
     private var discovery: Discovery? = null
+    private var nearby: List<Found> = emptyList()
     private var wifiLock: WifiManager.WifiLock? = null
 
     private var linkState = KeyboardLink.State.CONNECTING
@@ -55,7 +60,8 @@ class KeyboardActivity : Activity() {
         super.onCreate(savedInstanceState)
         hosts = HostStore(this)
         layouts = LayoutStore(this)
-        host = intent.getStringExtra(EXTRA_HOST)?.let(hosts::get) ?: run { finish(); return }
+        val hostId = savedInstanceState?.getString(EXTRA_HOST) ?: intent.getStringExtra(EXTRA_HOST)
+        host = hostId?.let(hosts::get) ?: run { finish(); return }
         hostName = host.name
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -66,6 +72,8 @@ class KeyboardActivity : Activity() {
         status = text("", 12f, Palette.FG_DIM, bold = true).apply {
             background = rounded(Palette.SURFACE, dp(12f).toFloat())
             setPadding(dp(12f), dp(4f), dp(12f), dp(4f))
+            isClickable = true
+            setOnClickListener { pickHost() }
         }
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -73,6 +81,7 @@ class KeyboardActivity : Activity() {
             setPadding(dp(8f), dp(4f), dp(8f), 0)
             addView(status)
             addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+            addView(barButton("⇄ PC") { pickHost() })
             addView(barButton("⌨ Layout") { pickLayout() })
             addView(barButton("✕") { finish() })
         }
@@ -120,15 +129,34 @@ class KeyboardActivity : Activity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(EXTRA_HOST, host.hostId)
+    }
+
     override fun onStart() {
         super.onStart()
         acquireWifiLock()
-        val l = KeyboardLink(host, phoneName(), keys, object : KeyboardLink.Listener {
+        connect()
+        // The computer may have a new address; mDNS finds it by host id. The
+        // list also tells the computer switcher which ones are around.
+        discovery = Discovery(this) { found ->
+            nearby = found
+            routeCandidates()
+        }.also { it.start() }
+    }
+
+    /** Start a session with [host]. Callbacks from a replaced link are ignored. */
+    private fun connect() {
+        val target = host
+        lateinit var l: KeyboardLink
+        l = KeyboardLink(target, phoneName(), keys, object : KeyboardLink.Listener {
             override fun onState(state: KeyboardLink.State, hostName: String?) = runOnUiThread {
+                if (link !== l) return@runOnUiThread
                 linkState = state
                 if (hostName != null) this@KeyboardActivity.hostName = hostName
                 if (state == KeyboardLink.State.CONNECTED) {
-                    link?.peer?.address?.hostAddress?.let { hosts.rememberAddress(host.hostId, it) }
+                    l.peer?.address?.hostAddress?.let { hosts.rememberAddress(target.hostId, it) }
                 } else {
                     pingMs = -1
                 }
@@ -136,16 +164,64 @@ class KeyboardActivity : Activity() {
             }
 
             override fun onPing(ms: Int) = runOnUiThread {
+                if (link !== l) return@runOnUiThread
                 pingMs = ms
                 renderStatus()
             }
         })
         link = l
         l.start()
-        // The computer may have a new address; mDNS finds it by host id.
-        discovery = Discovery(this) { found ->
-            found.filter { it.hostId == host.hostId }.forEach { l.addCandidate(it.address) }
-        }.also { it.start() }
+        routeCandidates()
+    }
+
+    private fun routeCandidates() {
+        val l = link ?: return
+        nearby.filter { it.hostId == host.hostId }.forEach { l.addCandidate(it.address) }
+    }
+
+    /** Move the keyboard to another paired computer. */
+    private fun switchTo(next: HostRecord) {
+        if (next.hostId == host.hostId) return
+        // Let go of everything first: the old computer gets BYE and releases
+        // whatever was held; nothing carries over to the new one.
+        keyboard.releaseAll()
+        keys.releaseAll()
+        link?.stop()
+        link = null
+        host = next
+        hostName = next.name
+        linkState = KeyboardLink.State.CONNECTING
+        pingMs = -1
+        hosts.put(next) // most recently used first on the connect screen
+        renderStatus()
+        connect()
+    }
+
+    private fun pickHost() {
+        val all = hosts.all()
+        val nearbyIds = nearby.mapNotNull { it.hostId }.toSet()
+        val labels = all.map { h ->
+            val current = h.hostId == host.hostId
+            val detail = when {
+                current && linkState == KeyboardLink.State.CONNECTED ->
+                    if (pingMs >= 0) "connected · $pingMs ms" else "connected"
+                current -> "connecting…"
+                h.hostId in nearbyIds -> "nearby"
+                else -> "not seen on this network"
+            }
+            (if (current) "● " else "   ") + h.name + "  ·  " + detail
+        }.toTypedArray()
+
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Type on")
+            .setItems(labels) { _, i -> switchTo(all[i]) }
+            .setNeutralButton("Pair another…") { _, _ ->
+                startActivity(Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                finish()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     override fun onPause() {

@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
 
         col.addView(section("PAIR A COMPUTER"))
         col.addView(text(
-            "On Omarchy, click the keyboard icon in the bar and choose Pair phone, or run `omakeyd pair` in a terminal. Then scan the code.",
+            "On Omarchy, click the keyboard icon in the bar and choose Pair a phone, or run `omakeyd pair` in a terminal. Then scan the code.",
             13f, Palette.FG_DIM,
         ).apply { setPadding(0, 0, 0, dp(12f)) })
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
