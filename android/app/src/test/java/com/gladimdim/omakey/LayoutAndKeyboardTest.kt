@@ -27,7 +27,7 @@ class LayoutAndKeyboardTest {
     @Test
     fun everyBundledLayoutParses() {
         val files = File(assets, "layouts").listFiles()!!.filter { it.name.endsWith(".json") }
-        assertTrue(files.size >= 2)
+        assertTrue(files.size >= 10)
         for (f in files) LayoutParser.parse(f.readText(), keycodes)
     }
 
