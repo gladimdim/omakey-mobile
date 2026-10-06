@@ -107,6 +107,21 @@ other apps are imported too.
   the two connect screens are small enough to build in code, keeping the
   APK and build lean.
 
+## Touchpad
+
+Tap or pull down the **⌄ touchpad** handle at the top centre of the keyboard
+screen and a touchpad slides down over the keys (pull it back up, tap the
+handle or press Back to return):
+
+- one finger moves the pointer; a tap clicks; tap and hold right-clicks
+- two fingers scroll, content following the fingers; a two-finger tap
+  right-clicks, a three-finger tap middle-clicks
+- Left, Middle and Right buttons along the bottom are held while touched,
+  so hold Left and move with another finger to drag
+
+It needs omakeyd 0.3 or newer on the computer (the bar widget offers the
+update); with an older one the touchpad says so.
+
 ## iOS (planned)
 
 Same protocol and layouts: SwiftUI shell, a `UIView` keyboard using

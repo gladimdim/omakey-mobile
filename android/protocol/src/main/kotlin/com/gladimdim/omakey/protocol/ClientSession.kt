@@ -15,7 +15,7 @@ class ClientSession(
 ) {
     sealed interface Result {
         /** Handshake finished; the server is called [hostName]. */
-        data class Connected(val hostName: String, val sessionId: Int) : Result
+        data class Connected(val hostName: String, val sessionId: Int, val features: Int = 0) : Result
         data class Acked(val pingMs: Int) : Result
         data object Rejected : Result
     }
@@ -88,7 +88,7 @@ class ClientSession(
         recvCounter = 0
         connected = true
         keys.resetSession()
-        return Result.Connected(w.name, w.sessionId)
+        return Result.Connected(w.name, w.sessionId, w.features)
     }
 
     private fun onAck(p: Packet, nowMs: Int): Result? {

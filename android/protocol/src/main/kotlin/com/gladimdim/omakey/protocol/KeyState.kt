@@ -18,6 +18,13 @@ class KeyState {
     private val pending = ArrayDeque<KeyEvent>()
     private var nextEseq = 1
 
+    // Touchpad motion and scroll waiting for the next INPUT. Fractions are
+    // kept, so slow finger movement still adds up to whole counts.
+    private var moveX = 0f
+    private var moveY = 0f
+    private var wheel = 0f
+    private var hwheel = 0f
+
     /** Bumped on every change, so the sender knows to transmit now. */
     @Volatile
     var version = 0L
@@ -74,8 +81,33 @@ class KeyState {
     @Synchronized
     fun held(): IntArray = heldOrder.copyOf(heldCount)
 
+    /** Touchpad motion in mouse counts; sent with the next INPUT, once. */
     @Synchronized
-    fun buildInput(clientTimeMs: Int): Input = Input(clientTimeMs, 0, heldOrder.copyOf(heldCount), pending.toList())
+    fun addMotion(dx: Float, dy: Float) {
+        moveX += dx
+        moveY += dy
+        version++
+    }
+
+    /** Scroll in 1/120 of a notch: positive [v] scrolls up, positive [h] right. */
+    @Synchronized
+    fun addScroll(v: Float, h: Float) {
+        wheel += v
+        hwheel += h
+        version++
+    }
+
+    @Synchronized
+    fun buildInput(clientTimeMs: Int): Input =
+        Input(clientTimeMs, 0, heldOrder.copyOf(heldCount), pending.toList(), takePointer())
+
+    private fun takePointer(): Pointer? {
+        fun take(v: Float): Int = v.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+        val p = Pointer(take(moveX), take(moveY), take(wheel), take(hwheel))
+        if (p.dx == 0 && p.dy == 0 && p.wheel == 0 && p.hwheel == 0) return null
+        moveX -= p.dx; moveY -= p.dy; wheel -= p.wheel; hwheel -= p.hwheel
+        return p
+    }
 
     private fun addEvent(code: Int, value: Int) {
         pending.addLast(KeyEvent(nextEseq, code, value))

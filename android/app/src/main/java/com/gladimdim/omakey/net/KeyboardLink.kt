@@ -41,6 +41,10 @@ class KeyboardLink(
     private var thread: Thread? = null
 
     /** The address that answered; reported so it can be tried first next time. */
+    /** WELCOME feature bits of the current session, e.g. [Wire.FEATURE_POINTER]. */
+    @Volatile var features = 0
+        private set
+
     @Volatile var peer: InetSocketAddress? = null
         private set
 
@@ -155,6 +159,7 @@ class KeyboardLink(
                     when (val r = session.receive(rxArray, rx.position(), t)) {
                         is ClientSession.Result.Connected -> {
                             peer = from as InetSocketAddress
+                            features = r.features
                             lastHeard = t
                             sentVersion = -1 // push the held set right away
                             setState(State.CONNECTED, r.hostName)

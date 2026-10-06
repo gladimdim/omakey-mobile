@@ -72,11 +72,24 @@ class TestVectorsTest {
         assertTrue(keys.press(57))
         assertEquals(in2.getString("packet"), Hex.encode(client.inputPacket(in2.getInt("client_time_ms"))!!))
 
+        // The server advertises the touchpad.
+        assertEquals(v.getJSONObject("welcome").getInt("features"), connected.features)
+        assertEquals(Wire.FEATURE_POINTER, connected.features and Wire.FEATURE_POINTER)
+
+        // Left button down (sent on its own, counter 3), then motion and scroll ride the next INPUT.
+        val in4 = v.getJSONObject("input4")
+        assertTrue(keys.press(Wire.BTN_LEFT))
+        client.inputPacket(1032)!!
+        val p = in4.getJSONObject("pointer")
+        keys.addMotion(p.getInt("dx").toFloat(), p.getInt("dy").toFloat())
+        keys.addScroll(p.getInt("wheel").toFloat(), p.getInt("hwheel").toFloat())
+        assertEquals(in4.getString("packet"), Hex.encode(client.inputPacket(in4.getInt("client_time_ms"))!!))
+
         val ackV = v.getJSONObject("ack")
         val ack = hex("packet", ackV)
         val now = ackV.getInt("client_time_ms") + 5
         assertEquals(ClientSession.Result.Acked(5), client.receive(ack, ack.size, now))
-        assertEquals(false, keys.hasUnacked)
+        assertEquals(true, keys.hasUnacked) // event 3, the button press, is newer than this ACK
 
         assertEquals(v.getJSONObject("bye").getString("packet"), Hex.encode(client.byePacket()!!))
     }

@@ -4,6 +4,14 @@ import java.nio.ByteBuffer
 
 /** Constants from PROTOCOL.md. All integers on the wire are big-endian. */
 object Wire {
+    /** WELCOME feature bit: the server has a virtual mouse for the touchpad. */
+    const val FEATURE_POINTER = 1
+    /** Length of the INPUT pointer trailer after its length byte. */
+    const val POINTER_LEN = 8
+    const val BTN_LEFT = 0x110
+    const val BTN_RIGHT = 0x111
+    const val BTN_MIDDLE = 0x112
+
     const val MAGIC_0: Byte = 0x4F // 'O'
     const val MAGIC_1: Byte = 0x4B // 'K'
     const val VERSION: Byte = 1
@@ -108,12 +116,19 @@ class Hello(val clientRandom: ByteArray, val name: String, val platform: Byte = 
     }
 }
 
-class Welcome(val clientRandom: ByteArray, val serverRandom: ByteArray, val sessionId: Int, val name: String) {
+class Welcome(
+    val clientRandom: ByteArray,
+    val serverRandom: ByteArray,
+    val sessionId: Int,
+    val name: String,
+    /** [Wire.FEATURE_POINTER] and friends; 0 from servers that predate them. */
+    val features: Int = 0,
+) {
     fun encode(): ByteArray {
         val nameBytes = truncateUtf8(name, 255)
-        return ByteBuffer.allocate(Wire.RANDOM_LEN * 2 + 4 + 1 + nameBytes.size)
+        return ByteBuffer.allocate(Wire.RANDOM_LEN * 2 + 4 + 1 + nameBytes.size + 1)
             .put(clientRandom).put(serverRandom).putInt(sessionId)
-            .put(nameBytes.size.toByte()).put(nameBytes).array()
+            .put(nameBytes.size.toByte()).put(nameBytes).put(features.toByte()).array()
     }
 
     companion object {
@@ -123,7 +138,8 @@ class Welcome(val clientRandom: ByteArray, val serverRandom: ByteArray, val sess
             val sr = ByteArray(Wire.RANDOM_LEN).also { buf.get(it) }
             val sid = buf.int
             val n = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }
-            Welcome(cr, sr, sid, String(n, Charsets.UTF_8))
+            val features = if (buf.hasRemaining()) buf.get().toInt() and 0xFF else 0
+            Welcome(cr, sr, sid, String(n, Charsets.UTF_8), features)
         } catch (e: RuntimeException) {
             null
         }
@@ -133,14 +149,29 @@ class Welcome(val clientRandom: ByteArray, val serverRandom: ByteArray, val sess
 /** One key press (value 1) or release (value 0). */
 data class KeyEvent(val eseq: Int, val code: Int, val value: Int)
 
-class Input(val clientTimeMs: Int, val flags: Int, val held: IntArray, val events: List<KeyEvent>) {
+/** Touchpad motion and scroll since the previous INPUT; scroll in 1/120 of a notch. */
+data class Pointer(val dx: Int, val dy: Int, val wheel: Int, val hwheel: Int)
+
+class Input(
+    val clientTimeMs: Int,
+    val flags: Int,
+    val held: IntArray,
+    val events: List<KeyEvent>,
+    val pointer: Pointer? = null,
+) {
     fun encode(): ByteArray {
         require(held.size <= 255 && events.size <= Wire.MAX_EVENTS)
-        val buf = ByteBuffer.allocate(4 + 1 + 1 + held.size * 2 + 1 + events.size * 5)
+        val trailer = if (pointer != null) 1 + Wire.POINTER_LEN else 0
+        val buf = ByteBuffer.allocate(4 + 1 + 1 + held.size * 2 + 1 + events.size * 5 + trailer)
         buf.putInt(clientTimeMs).put(flags.toByte()).put(held.size.toByte())
         for (c in held) buf.putShort(c.toShort())
         buf.put(events.size.toByte())
         for (e in events) buf.putShort(e.eseq.toShort()).putShort(e.code.toShort()).put(e.value.toByte())
+        if (pointer != null) {
+            buf.put(Wire.POINTER_LEN.toByte())
+            buf.putShort(pointer.dx.toShort()).putShort(pointer.dy.toShort())
+                .putShort(pointer.wheel.toShort()).putShort(pointer.hwheel.toShort())
+        }
         return buf.array()
     }
 
@@ -153,7 +184,14 @@ class Input(val clientTimeMs: Int, val flags: Int, val held: IntArray, val event
             val events = List(buf.get().toInt() and 0xFF) {
                 KeyEvent(buf.short.toInt() and 0xFFFF, buf.short.toInt() and 0xFFFF, buf.get().toInt() and 0xFF)
             }
-            Input(t, flags, held, events)
+            var pointer: Pointer? = null
+            if (buf.hasRemaining()) {
+                val len = buf.get().toInt() and 0xFF
+                if (len >= Wire.POINTER_LEN) {
+                    pointer = Pointer(buf.short.toInt(), buf.short.toInt(), buf.short.toInt(), buf.short.toInt())
+                }
+            }
+            Input(t, flags, held, events, pointer)
         } catch (e: RuntimeException) {
             null
         }

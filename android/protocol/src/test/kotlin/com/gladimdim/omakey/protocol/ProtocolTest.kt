@@ -231,4 +231,30 @@ class ProtocolTest {
         val reject = Wire.header(Wire.REJECT, host.deviceId, ByteArray(12)) + byteArrayOf(Wire.REJECT_UNKNOWN_DEVICE)
         assertEquals(ClientSession.Result.Rejected, client.receive(reject, reject.size, 0))
     }
+
+    @Test
+    fun pointerTrailerIsOptionalAndMotionIsSentOnce() {
+        val keys = KeyState()
+        assertEquals(null, keys.buildInput(1).pointer)
+        keys.addMotion(2.6f, -1.4f)
+        keys.addScroll(-50f, 0f)
+        val first = keys.buildInput(2)
+        assertEquals(Pointer(2, -1, -50, 0), first.pointer)
+        // Fractions carry over; whole counts are not resent.
+        keys.addMotion(0.5f, 0f)
+        assertEquals(Pointer(1, 0, 0, 0), keys.buildInput(3).pointer)
+        assertEquals(null, keys.buildInput(4).pointer)
+        // Round trip, and an old-style packet without a trailer still decodes.
+        val decoded = Input.decode(first.encode())!!
+        assertEquals(first.pointer, decoded.pointer)
+        assertEquals(null, Input.decode(Input(1, 0, IntArray(0), emptyList()).encode())!!.pointer)
+    }
+
+    @Test
+    fun welcomeFeaturesDefaultToZeroFromOldServers() {
+        val w = Welcome(ByteArray(16), ByteArray(16), 5, "desk", Wire.FEATURE_POINTER)
+        val enc = w.encode()
+        assertEquals(Wire.FEATURE_POINTER, Welcome.decode(enc)!!.features)
+        assertEquals(0, Welcome.decode(enc.copyOf(enc.size - 1))!!.features)
+    }
 }

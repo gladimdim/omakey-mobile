@@ -277,9 +277,9 @@
   {
    "id": "space-left",
    "x": 0.0,
-   "y": 6.05,
+   "y": 6.35,
    "w": 5,
-   "h": 1.25,
+   "h": 0.95,
    "label": "",
    "code": "KEY_SPACE",
    "style": "space"
@@ -544,9 +544,9 @@
   {
    "id": "space-right",
    "x": 14.9,
-   "y": 6.05,
+   "y": 6.35,
    "w": 5,
-   "h": 1.25,
+   "h": 0.95,
    "label": "",
    "code": "KEY_SPACE",
    "style": "space"
@@ -782,9 +782,9 @@
   {
    "id": "center-super",
    "x": 5.2,
-   "y": 6.05,
+   "y": 6.35,
    "w": 1,
-   "h": 1.25,
+   "h": 0.95,
    "label": "Super",
    "code": "KEY_LEFTMETA",
    "style": "mod"
@@ -792,9 +792,9 @@
   {
    "id": "center-alt",
    "x": 6.2,
-   "y": 6.05,
+   "y": 6.35,
    "w": 1,
-   "h": 1.25,
+   "h": 0.95,
    "label": "Alt",
    "code": "KEY_LEFTALT",
    "style": "mod"
@@ -918,9 +918,9 @@
   {
    "id": "center-ralt",
    "x": 12.7,
-   "y": 6.05,
+   "y": 6.35,
    "w": 1,
-   "h": 1.25,
+   "h": 0.95,
    "label": "Alt",
    "code": "KEY_LEFTALT",
    "style": "mod"
@@ -928,9 +928,9 @@
   {
    "id": "center-rsuper",
    "x": 13.7,
-   "y": 6.05,
+   "y": 6.35,
    "w": 1,
-   "h": 1.25,
+   "h": 0.95,
    "label": "Super",
    "code": "KEY_RIGHTMETA",
    "style": "mod"
@@ -948,9 +948,9 @@
   {
    "id": "center-enter",
    "x": 7.2,
-   "y": 6.05,
+   "y": 6.35,
    "w": 5.5,
-   "h": 1.25,
+   "h": 0.95,
    "label": "Enter",
    "code": "KEY_ENTER",
    "style": "accent",
@@ -959,13 +959,13 @@
      "x": 7.2,
      "y": 4.05,
      "w": 2,
-     "h": 2.0
+     "h": 2.3
     },
     {
      "x": 10.7,
      "y": 4.05,
      "w": 2,
-     "h": 2.0
+     "h": 2.3
     }
    ]
   }

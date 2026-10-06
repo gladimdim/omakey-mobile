@@ -59,6 +59,10 @@ class LayoutAndKeyboardTest {
         assertEquals(lb.x + lb.w, del.x, 1e-4f); assertEquals(del.x + del.w, rb.x, 1e-4f)
         assertEquals(lb.y, del.y); assertEquals(lb.h, del.h)
         assertTrue(del.x < split.splitAt!! && del.x + del.w > split.splitAt!!)
+        // The space row is set apart from the letters by 30% of a letter key.
+        val z = k("z"); val space = k("space-left")
+        assertEquals(0.3f, space.y - (z.y + z.h), 1e-4f)
+        assertEquals(k("space-right").y, space.y)
         // The one asymmetric key: a regular Backspace in the top right corner.
         val corner = k("corner-backspace")
         assertEquals(14, corner.code); assertEquals(1f, corner.w)
