@@ -119,8 +119,11 @@ handle or press Back to return):
 - the bottom row is Ctrl, Shift, Left, Middle, Right, Shift, Ctrl, held
   while touched: hold Left and move with another finger to drag, or hold
   Ctrl and scroll to zoom. Swipe up from the row to put the touchpad away
-- a vertical slider on each side sets the pointer speed; the chip at the
-  top picks a preset for your monitor (laptop, 1080p, 1440p, 3440×1440
+- down each side, mirrored: Left click, Right click, Ctrl + Left and
+  Shift + Left, held while touched (drag, Ctrl-click multi-select,
+  Shift-click range select with the other thumb on the pad)
+- the speed slider at the bottom centre sets the pointer speed; the chip
+  above it picks a preset for your monitor (laptop, 1080p, 1440p, 3440×1440
   ultrawide, 4K, 5120×1440…). Each computer keeps its own speed
 
 It needs omakeyd 0.3 or newer on the computer (the bar widget offers the
