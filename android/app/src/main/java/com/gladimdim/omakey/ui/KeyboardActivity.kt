@@ -65,8 +65,13 @@ class KeyboardActivity : Activity() {
         hostName = host.name
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Draw under the camera cutout too: the keyboard uses the whole display.
         window.attributes = window.attributes.apply {
-            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30) {
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            } else {
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
 
         status = text("", 12f, Palette.FG_DIM, bold = true).apply {
@@ -91,12 +96,6 @@ class KeyboardActivity : Activity() {
             setBackgroundColor(Palette.BG)
             addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(32f)))
             addView(keyboard, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-            // Keep keys out from under a notch or rounded corners.
-            setOnApplyWindowInsetsListener { v, insets ->
-                val c = insets.displayCutout
-                v.setPadding(c?.safeInsetLeft ?: 0, 0, c?.safeInsetRight ?: 0, c?.safeInsetBottom ?: 0)
-                insets
-            }
         }
         setContentView(root)
         keyboard.setLayout(layouts.selected(), sink)

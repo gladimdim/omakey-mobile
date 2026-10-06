@@ -3,6 +3,7 @@ package com.gladimdim.omakey.keyboard
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
@@ -20,6 +21,8 @@ import com.gladimdim.omakey.ui.Palette
 class KeyboardView(context: Context) : View(context) {
     private var model: KeyboardModel? = null
     private var rects: Array<RectF> = emptyArray()
+    /** Outline of each shaped key (one with extra parts), or null for plain rectangles. */
+    private var shapes: Array<Path?> = emptyArray()
     private var unit = 1f
     private var originX = 0f
     /** Units the right side of a split layout is moved right by. */
@@ -50,6 +53,7 @@ class KeyboardView(context: Context) : View(context) {
         model?.cancelAll()
         model = KeyboardModel(layout, sink)
         rects = Array(layout.keys.size) { RectF() }
+        shapes = arrayOfNulls(layout.keys.size)
         computeGeometry()
         invalidate()
     }
@@ -66,7 +70,8 @@ class KeyboardView(context: Context) : View(context) {
     private fun computeGeometry() {
         val m = model ?: return
         val l = m.layout
-        val pad = resources.displayMetrics.density * 4
+        // Edge to edge: the keys' own gaps are the only margin.
+        val pad = 0f
         val availW = width - pad * 2
         val availH = height - pad * 2
         if (availW <= 0 || availH <= 0) return
@@ -79,12 +84,15 @@ class KeyboardView(context: Context) : View(context) {
         originX = if (stretch > 0f) pad else (width - unit * l.width) / 2
         originY = (height - unit * l.height) / 2
         val gap = unit * 0.05f
+        val radius = unit * 0.12f
         l.keys.forEachIndexed { i, k ->
-            val dx = if (split != null && k.x >= split) stretch else 0f
+            val drawn = k.rects.map { it.stretched(split, stretch) }
+            val main = drawn[0]
             rects[i].set(
-                originX + (k.x + dx) * unit + gap, originY + k.y * unit + gap,
-                originX + (k.x + dx + k.w) * unit - gap, originY + (k.y + k.h) * unit - gap,
+                originX + main.x * unit + gap, originY + main.y * unit + gap,
+                originX + (main.x + main.w) * unit - gap, originY + (main.y + main.h) * unit - gap,
             )
+            shapes[i] = if (drawn.size > 1) outline(drawn, gap, radius) else null
         }
     }
 
@@ -123,7 +131,8 @@ class KeyboardView(context: Context) : View(context) {
                 k.style == KeyStyle.FKEY -> Palette.KEY_FKEY
                 else -> Palette.KEY
             }
-            canvas.drawRoundRect(r, radius, radius, keyPaint)
+            val shape = shapes[i]
+            if (shape != null) canvas.drawPath(shape, keyPaint) else canvas.drawRoundRect(r, radius, radius, keyPaint)
 
             val override = if (layer != null) k.layers[layer] else null
             val label = m.labelFor(i)
@@ -151,6 +160,33 @@ class KeyboardView(context: Context) : View(context) {
                 }
             }
         }
+    }
+
+    /**
+     * One outline for a key made of several rectangles: each is inset by the
+     * key gap except on sides where it meets another part, which it overlaps
+     * instead, so the parts read as a single key.
+     */
+    private fun outline(parts: List<com.gladimdim.omakey.layout.KeyRect>, gap: Float, radius: Float): Path {
+        val e = 1e-4f
+        val path = Path()
+        for (p in parts) {
+            fun meets(test: (com.gladimdim.omakey.layout.KeyRect) -> Boolean) = parts.any { it !== p && test(it) }
+            val overlapY = { o: com.gladimdim.omakey.layout.KeyRect -> o.y < p.y + p.h - e && p.y < o.y + o.h - e }
+            val overlapX = { o: com.gladimdim.omakey.layout.KeyRect -> o.x < p.x + p.w - e && p.x < o.x + o.w - e }
+            val l = if (meets { overlapY(it) && kotlin.math.abs(it.x + it.w - p.x) < e }) -gap else gap
+            val r = if (meets { overlapY(it) && kotlin.math.abs(p.x + p.w - it.x) < e }) -gap else gap
+            val t = if (meets { overlapX(it) && kotlin.math.abs(it.y + it.h - p.y) < e }) -gap else gap
+            val b = if (meets { overlapX(it) && kotlin.math.abs(p.y + p.h - it.y) < e }) -gap else gap
+            val one = Path()
+            one.addRoundRect(
+                originX + p.x * unit + l, originY + p.y * unit + t,
+                originX + (p.x + p.w) * unit - r, originY + (p.y + p.h) * unit - b,
+                radius, radius, Path.Direction.CW,
+            )
+            path.op(one, Path.Op.UNION)
+        }
+        return path
     }
 
     private fun drawFitted(canvas: Canvas, text: String, r: RectF, sizeUnits: Float) {

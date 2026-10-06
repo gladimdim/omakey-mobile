@@ -34,28 +34,32 @@ class LayoutAndKeyboardTest {
     @Test
     fun splitQwertyHasTwoSpacesAndACentreThumbCluster() {
         val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
-        assertEquals(2, split.keys.count { it.code == 57 })
-        val enter = split.keys.first { it.id == "center-enter" }
-        val shift = split.keys.first { it.id == "center-shift" }
-        val ctrl = split.keys.first { it.id == "center-ctrl" }
-        // Modifiers and Enter exist only in the centre cluster.
-        val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
-        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-super", "center-alt"),
-            split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
-        // Enter, Shift and Ctrl are the biggest keys there.
-        val centre = split.keys.filter { it.x >= shift.x && it.x < enter.x + enter.w }
-        val big = setOf(enter, shift, ctrl)
-        val smallestBig = big.minOf { it.w * it.h }
-        assertTrue(centre.filter { it !in big }.all { it.w * it.h < smallestBig })
-        // Letters are square.
-        assertTrue(split.keys.filter { it.label.length == 1 && it.label[0].isLetter() }.all { it.w == 1f && it.h == 1f })
-        // Letters touch the outer edges; T is left of the centre, Y right of it.
         fun k(id: String) = split.keys.first { it.id == id }
+        assertEquals(2, split.keys.count { it.code == 57 })
+        // Modifiers and Enter exist only in the islands.
+        val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
+        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-rctrl", "center-super", "center-alt"),
+            split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
+        // Two mirrored 2x2 Ctrls, Shift mirrored by Backspace.
+        val lc = k("center-ctrl"); val rc = k("center-rctrl")
+        assertEquals(2f, lc.w); assertEquals(2f, rc.w); assertEquals(lc.h, rc.h); assertEquals(lc.y, rc.y)
+        assertEquals(k("center-shift").w * k("center-shift").h, k("center-backspace").w * k("center-backspace").h)
+        // Enter is |_|: a bar across the split plus a 2x2 block on each side, joined at the bar.
+        val enter = k("center-enter")
+        val at = split.splitAt!!
+        assertEquals(3, enter.rects.size)
+        assertTrue(enter.x < at && enter.x + enter.w > at)
+        val (left, right) = enter.parts
+        assertTrue(left.x + left.w <= at && right.x >= at)
+        for (p in enter.parts) {
+            assertEquals(2f, p.w); assertEquals(enter.y, p.y + p.h, 1e-4f)
+        }
+        assertEquals(left.x, enter.x); assertEquals(right.x + right.w, enter.x + enter.w, 1e-4f)
+        // Letters touch the outer edges; T is left of the islands, Y right of them.
         for (id in listOf("q", "a", "z")) assertEquals(0f, k(id).x)
         for (id in listOf("p", "semicolon", "slash")) assertEquals(split.width, k(id).x + k(id).w, 1e-4f)
-        assertTrue(k("t").x + k("t").w <= shift.x && k("y").x >= enter.x + enter.w)
-        // Tab and Caps are in the centre too.
-        for (id in listOf("tab", "capslock")) assertTrue(k(id).x >= shift.x && k(id).x < enter.x + enter.w)
+        assertTrue(k("t").x + k("t").w <= lc.x && k("y").x >= rc.x + rc.w)
+        for (id in listOf("tab", "capslock", "esc", "grave", "f6")) assertTrue(id, k(id).x >= lc.x && k(id).x < at)
     }
 
     @Test
@@ -63,22 +67,30 @@ class LayoutAndKeyboardTest {
         val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
         val at = split.splitAt!!
         assertTrue(at > 0 && at < split.width)
-        assertTrue(split.keys.none { it.x < at && it.x + it.w > at + 1e-4f })
+        // Only Enter's bar crosses the split (it stretches with the gap).
+        assertEquals(listOf("center-enter"), split.keys.filter { it.x < at && it.x + it.w > at + 1e-4f }.map { it.id })
         val m = KeyboardModel(split, object : KeyboardModel.Sink {
             override fun keyDown(code: Int) {}
             override fun keyUp(code: Int) {}
         })
         val enter = split.keys.indexOfFirst { it.id == "center-enter" }
         val shift = split.keys.indexOfFirst { it.id == "center-shift" }
+        val bksp = split.keys.indexOfFirst { it.id == "center-backspace" }
         val e = split.keys[enter]
         val sh = split.keys[shift]
+        val bk = split.keys[bksp]
         val stretch = 3f
         // The right side moved 3 units right; the left side stayed.
-        assertEquals(enter, m.hitTestStretched(e.x + stretch + 0.5f, e.y + 0.5f, stretch))
+        assertEquals(bksp, m.hitTestStretched(bk.x + stretch + 0.5f, bk.y + 0.5f, stretch))
         assertEquals(shift, m.hitTestStretched(sh.x + 0.5f, sh.y + 0.5f, stretch))
-        // Touches in the widened gap hit nothing; no stretch behaves like hitTest.
-        assertEquals(-1, m.hitTestStretched(at + 1f, e.y + 0.5f, stretch))
-        assertEquals(enter, m.hitTestStretched(e.x + 0.5f, e.y + 0.5f, 0f))
+        // Enter's bar crosses the split, so it stretches: the middle of the widened gap is Enter...
+        assertEquals(enter, m.hitTestStretched(at + stretch / 2, e.y + 0.5f, stretch))
+        // ...and so are both of its 2x2 blocks, the right one moved with the right side.
+        assertEquals(enter, m.hitTestStretched(e.parts[0].x + 0.5f, e.parts[0].y + 0.5f, stretch))
+        assertEquals(enter, m.hitTestStretched(e.parts[1].x + stretch + 0.5f, e.parts[1].y + 0.5f, stretch))
+        // Above the bar the gap hits nothing; no stretch behaves like hitTest.
+        assertEquals(-1, m.hitTestStretched(at + stretch / 2, e.parts[0].y + 0.5f, stretch))
+        assertEquals(bksp, m.hitTestStretched(bk.x + 0.5f, bk.y + 0.5f, 0f))
         // Every bundled split board declares its split.
         for (id in listOf("corne", "ferris-sweep", "lily58", "ergodox", "kinesis-advantage", "alice", "split-qwerty")) {
             assertTrue(id, LayoutParser.parse(File(assets, "layouts/$id.json").readText(), keycodes).splitAt != null)

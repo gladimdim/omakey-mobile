@@ -29,6 +29,22 @@ enum class KeyStyle { NORMAL, MOD, FKEY, ACCENT, SPACE }
 /** A key's behaviour on one layer. [code] 0 means the key does nothing there. */
 class LayerOverride(val code: Int, val codeName: String?, val label: String?)
 
+/** A rectangle in layout units. */
+class KeyRect(val x: Float, val y: Float, val w: Float, val h: Float) {
+    fun contains(ux: Float, uy: Float) = ux >= x && ux < x + w && uy >= y && uy < y + h
+
+    /**
+     * This rectangle with a split layout's gap widened by [stretch] units:
+     * rectangles right of [splitAt] move right, ones crossing it get wider.
+     */
+    fun stretched(splitAt: Float?, stretch: Float): KeyRect {
+        if (splitAt == null || stretch <= 0f) return this
+        val left = if (x >= splitAt) x + stretch else x
+        val right = if (x + w > splitAt) x + w + stretch else x + w
+        return KeyRect(left, y, right - left, h)
+    }
+}
+
 class LayoutKey(
     val id: String,
     val x: Float,
@@ -44,7 +60,12 @@ class LayoutKey(
     val layer: String?,
     val style: KeyStyle,
     val layers: Map<String, LayerOverride>,
-)
+    /** Extra rectangles of a shaped key (a U-shaped Enter, say); empty for most keys. */
+    val parts: List<KeyRect> = emptyList(),
+) {
+    /** The main rectangle (where the label goes) first, then the parts. */
+    val rects: List<KeyRect> = listOf(KeyRect(x, y, w, h)) + parts
+}
 
 class Layout(
     val id: String,
@@ -70,6 +91,7 @@ object LayoutParser {
     const val MAX_BYTES = 256 * 1024
     private const val MAX_KEYS = 256
     private const val MAX_LABEL = 16
+    private const val MAX_PARTS = 8
     private val ID = Regex("^[a-z0-9][a-z0-9-]{0,63}$")
     private val LAYER = Regex("^[a-z][a-z0-9]{0,15}$")
 
@@ -151,7 +173,19 @@ object LayoutParser {
                 )
             }
         }
-        return LayoutKey(id, x, y, w, h, label, sub, code, codeName, layer, style, layers)
+        val parts = o.optJSONArray("parts")?.let { arr ->
+            if (arr.length() !in 1..MAX_PARTS) throw LayoutException("Key $id must have 1-$MAX_PARTS parts")
+            List(arr.length()) { n ->
+                val p = arr.getJSONObject(n)
+                val r = KeyRect(p.getDouble("x").toFloat(), p.getDouble("y").toFloat(),
+                    p.getDouble("w").toFloat(), p.getDouble("h").toFloat())
+                if (r.x < 0 || r.y < 0 || r.w !in 0.25f..16f || r.h !in 0.25f..16f) {
+                    throw LayoutException("Key $id part ${n + 1} has a bad position or size")
+                }
+                r
+            }
+        } ?: emptyList()
+        return LayoutKey(id, x, y, w, h, label, sub, code, codeName, layer, style, layers, parts)
     }
 
     private fun resolve(name: String, keycodes: Keycodes, id: String): Int {

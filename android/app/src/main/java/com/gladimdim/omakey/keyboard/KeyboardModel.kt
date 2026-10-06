@@ -29,21 +29,24 @@ class KeyboardModel(val layout: Layout, private val sink: Sink) {
     val activeLayer: String? get() = if (layerDepth == 0) null else layerStack[layerDepth - 1]
 
     /**
-     * Like [hitTest], for a split layout drawn with its right side moved
-     * [stretch] units to the right: touches in the widened gap hit nothing.
+     * Like [hitTest], for a split layout drawn with its gap widened by
+     * [stretch] units: the right side is moved right and rectangles crossing
+     * the split are stretched (see [com.gladimdim.omakey.layout.KeyRect.stretched]).
+     * The rest of the gap hits nothing.
      */
     fun hitTestStretched(ux: Float, uy: Float, stretch: Float): Int {
         val split = layout.splitAt
-        if (split == null || stretch <= 0f || ux < split) return hitTest(ux, uy)
-        if (ux < split + stretch) return -1
-        return hitTest(ux - stretch, uy)
+        if (split == null || stretch <= 0f) return hitTest(ux, uy)
+        for (i in keys.indices.reversed()) {
+            if (keys[i].rects.any { it.stretched(split, stretch).contains(ux, uy) }) return i
+        }
+        return -1
     }
 
     /** Index of the key at layout-unit coordinates, or -1. Keys drawn later win. */
     fun hitTest(ux: Float, uy: Float): Int {
         for (i in keys.indices.reversed()) {
-            val k = keys[i]
-            if (ux >= k.x && ux < k.x + k.w && uy >= k.y && uy < k.y + k.h) return i
+            if (keys[i].rects.any { it.contains(ux, uy) }) return i
         }
         return -1
     }
