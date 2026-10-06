@@ -25,6 +25,30 @@ class LayoutAndKeyboardTest {
     private fun key(id: String) = qwerty.keys.indexOfFirst { it.id == id }.also { assertTrue("no key $id", it >= 0) }
 
     @Test
+    fun everyBundledLayoutParses() {
+        val files = File(assets, "layouts").listFiles()!!.filter { it.name.endsWith(".json") }
+        assertTrue(files.size >= 2)
+        for (f in files) LayoutParser.parse(f.readText(), keycodes)
+    }
+
+    @Test
+    fun splitQwertyHasTwoSpacesAndACentreThumbCluster() {
+        val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
+        assertEquals(2, split.keys.count { it.code == 57 })
+        val enter = split.keys.first { it.id == "center-enter" }
+        // The centre Enter is the biggest key, and Shift/Ctrl there are big too.
+        assertTrue(split.keys.all { it === enter || it.w * it.h < enter.w * enter.h })
+        for (id in listOf("center-shift", "center-ctrl")) {
+            val k = split.keys.first { it.id == id }
+            assertTrue(k.w * k.h >= 2 * 2 * 1.5f)
+        }
+        // T is on the left of the centre cluster, Y on the right.
+        val t = split.keys.first { it.id == "t" }
+        val y = split.keys.first { it.id == "y" }
+        assertTrue(t.x + t.w <= enter.x - 3 && y.x >= enter.x + enter.w)
+    }
+
+    @Test
     fun parsesClassicQwerty() {
         assertEquals("classic-qwerty", qwerty.id)
         assertEquals(15f, qwerty.width)
