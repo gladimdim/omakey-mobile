@@ -33,17 +33,28 @@ class LayoutAndKeyboardTest {
 
     @Test
     fun splitQwertyHasTwoSpacesAndACentreThumbCluster() {
-        val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
+        val split = LayoutParser.parse(File(assets, "layouts/omakey-pro.json").readText(), keycodes)
         fun k(id: String) = split.keys.first { it.id == id }
         assertEquals(2, split.keys.count { it.code == 57 })
         // Modifiers and Enter exist only in the islands.
         val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
-        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-rctrl", "center-super", "center-alt"),
+        assertEquals("Omakey Pro", split.name)
+        assertEquals(setOf("center-enter", "center-shift", "center-rshift", "center-ctrl", "center-rctrl", "center-super",
+            "center-alt", "center-altgr"),
             split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
-        // Two mirrored 2x2 Ctrls, Shift mirrored by Backspace.
+        // Mirrored islands: 2x2 Ctrl and Backspace on both, Shift twins.
         val lc = k("center-ctrl"); val rc = k("center-rctrl")
         assertEquals(2f, lc.w); assertEquals(2f, rc.w); assertEquals(lc.h, rc.h); assertEquals(lc.y, rc.y)
-        assertEquals(k("center-shift").w * k("center-shift").h, k("center-backspace").w * k("center-backspace").h)
+        val lb = k("center-backspace"); val rb = k("center-backspace-right")
+        assertEquals(14, lb.code); assertEquals(14, rb.code); assertEquals(lb.y, rb.y); assertEquals(lb.h, rb.h)
+        val ls = k("center-shift"); val rs = k("center-rshift")
+        assertEquals(ls.y, rs.y); assertEquals(ls.w * ls.h, rs.w * rs.h)
+        // Rarely used keys sit in a top row above the F row, which is set apart from the number row.
+        val f1 = k("f1")
+        for (id in listOf("home", "end", "pageup", "pagedown", "capslock", "esc", "f6", "sysrq", "insert", "compose"))
+            assertTrue(id, k(id).y + k(id).h < f1.y)
+        assertTrue(k("1").y > f1.y + f1.h + 0.1f)
+        for (id in listOf("home", "end", "pageup", "pagedown")) assertTrue(id, k(id).x + k(id).w <= k("t").x + 1)
         // Enter is |_|: a bar across the split plus a 2x2 block on each side, joined at the bar.
         val enter = k("center-enter")
         val at = split.splitAt!!
@@ -59,12 +70,12 @@ class LayoutAndKeyboardTest {
         for (id in listOf("q", "a", "z")) assertEquals(0f, k(id).x)
         for (id in listOf("p", "semicolon", "slash")) assertEquals(split.width, k(id).x + k(id).w, 1e-4f)
         assertTrue(k("t").x + k("t").w <= lc.x && k("y").x >= rc.x + rc.w)
-        for (id in listOf("tab", "capslock", "esc", "grave", "f6")) assertTrue(id, k(id).x >= lc.x && k(id).x < at)
+        for (id in listOf("tab", "grave", "equal")) assertTrue(id, k(id).x >= lc.x && k(id).x < at)
     }
 
     @Test
     fun splitLayoutsStretchTheirGapAndHitTestAcrossIt() {
-        val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
+        val split = LayoutParser.parse(File(assets, "layouts/omakey-pro.json").readText(), keycodes)
         val at = split.splitAt!!
         assertTrue(at > 0 && at < split.width)
         // Only Enter's bar crosses the split (it stretches with the gap).
@@ -75,7 +86,7 @@ class LayoutAndKeyboardTest {
         })
         val enter = split.keys.indexOfFirst { it.id == "center-enter" }
         val shift = split.keys.indexOfFirst { it.id == "center-shift" }
-        val bksp = split.keys.indexOfFirst { it.id == "center-backspace" }
+        val bksp = split.keys.indexOfFirst { it.id == "center-rshift" }
         val e = split.keys[enter]
         val sh = split.keys[shift]
         val bk = split.keys[bksp]
@@ -92,7 +103,7 @@ class LayoutAndKeyboardTest {
         assertEquals(-1, m.hitTestStretched(at + stretch / 2, e.parts[0].y + 0.5f, stretch))
         assertEquals(bksp, m.hitTestStretched(bk.x + 0.5f, bk.y + 0.5f, 0f))
         // Every bundled split board declares its split.
-        for (id in listOf("corne", "ferris-sweep", "lily58", "ergodox", "kinesis-advantage", "alice", "split-qwerty")) {
+        for (id in listOf("corne", "ferris-sweep", "lily58", "ergodox", "kinesis-advantage", "alice", "omakey-pro")) {
             assertTrue(id, LayoutParser.parse(File(assets, "layouts/$id.json").readText(), keycodes).splitAt != null)
         }
     }

@@ -87,11 +87,13 @@ class LayoutStore(private val context: Context) {
     }
 
     var selectedId: String
-        get() = prefs.getString("selected", DEFAULT_ID) ?: DEFAULT_ID
+        get() = (prefs.getString("selected", DEFAULT_ID) ?: DEFAULT_ID).let { RENAMED[it] ?: it }
         set(value) = prefs.edit().putString("selected", value).apply()
 
     fun selected(): Layout = all().let { list ->
-        (list.firstOrNull { it.layout.id == selectedId } ?: list.first()).layout
+        (list.firstOrNull { it.layout.id == selectedId }
+            ?: list.firstOrNull { it.layout.id == DEFAULT_ID }
+            ?: list.first()).layout
     }
 
     /** Validates and saves an imported layout; it becomes the selected one. */
@@ -118,5 +120,7 @@ class LayoutStore(private val context: Context) {
 
     companion object {
         const val DEFAULT_ID = "classic-qwerty"
+        /** Built-in layouts that were renamed, old id to new, so a selection survives the update. */
+        private val RENAMED = mapOf("split-qwerty" to "omakey-pro")
     }
 }
