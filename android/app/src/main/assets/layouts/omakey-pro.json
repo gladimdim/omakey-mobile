@@ -5,7 +5,7 @@
  "name": "Omakey Pro",
  "author": "Omakey",
  "description": "Column-based QWERTY split for two thumbs: letters on the outer edges with a space bar under each half, mirrored islands with big Ctrl, Backspace and Shift on both sides, a U-shaped Enter bridging the split, and a top row for rarely used keys.",
- "width": 20.9,
+ "width": 19.9,
  "height": 7.3,
  "splitAt": 10.7,
  "keys": [
@@ -285,24 +285,8 @@
    "style": "space"
   },
   {
-   "id": "f7",
-   "x": 14.9,
-   "y": 1.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "F7",
-   "code": "KEY_F7",
-   "layers": {
-    "fn": {
-     "code": "KEY_PREVIOUSSONG",
-     "label": "Prev"
-    }
-   },
-   "style": "fkey"
-  },
-  {
    "id": "f8",
-   "x": 15.9,
+   "x": 14.9,
    "y": 1.0,
    "w": 1,
    "h": 0.85,
@@ -318,7 +302,7 @@
   },
   {
    "id": "f9",
-   "x": 16.9,
+   "x": 15.9,
    "y": 1.0,
    "w": 1,
    "h": 0.85,
@@ -334,7 +318,7 @@
   },
   {
    "id": "f10",
-   "x": 17.9,
+   "x": 16.9,
    "y": 1.0,
    "w": 1,
    "h": 0.85,
@@ -350,7 +334,7 @@
   },
   {
    "id": "f11",
-   "x": 18.9,
+   "x": 17.9,
    "y": 1.0,
    "w": 1,
    "h": 0.85,
@@ -360,7 +344,7 @@
   },
   {
    "id": "f12",
-   "x": 19.9,
+   "x": 18.9,
    "y": 1.0,
    "w": 1,
    "h": 0.85,
@@ -369,58 +353,8 @@
    "style": "fkey"
   },
   {
-   "id": "minus",
-   "x": 14.9,
-   "y": 2.05,
-   "w": 1,
-   "h": 1.0,
-   "label": "-",
-   "code": "KEY_MINUS",
-   "sub": "_"
-  },
-  {
-   "id": "leftbrace",
-   "x": 14.9,
-   "y": 3.05,
-   "w": 1,
-   "h": 1.0,
-   "label": "[",
-   "code": "KEY_LEFTBRACE",
-   "sub": "{"
-  },
-  {
-   "id": "apostrophe",
-   "x": 14.9,
-   "y": 4.05,
-   "w": 1,
-   "h": 1.0,
-   "label": "'",
-   "code": "KEY_APOSTROPHE",
-   "sub": "\""
-  },
-  {
-   "id": "rightbrace",
-   "x": 14.9,
-   "y": 5.05,
-   "w": 1,
-   "h": 1.0,
-   "label": "]",
-   "code": "KEY_RIGHTBRACE",
-   "sub": "}"
-  },
-  {
-   "id": "backslash",
-   "x": 14.9,
-   "y": 6.05,
-   "w": 1,
-   "h": 1.25,
-   "label": "\\",
-   "code": "KEY_BACKSLASH",
-   "sub": "|"
-  },
-  {
    "id": "6",
-   "x": 15.9,
+   "x": 14.9,
    "y": 2.05,
    "w": 1,
    "h": 1.0,
@@ -430,7 +364,7 @@
   },
   {
    "id": "7",
-   "x": 16.9,
+   "x": 15.9,
    "y": 2.05,
    "w": 1,
    "h": 1.0,
@@ -440,7 +374,7 @@
   },
   {
    "id": "8",
-   "x": 17.9,
+   "x": 16.9,
    "y": 2.05,
    "w": 1,
    "h": 1.0,
@@ -450,7 +384,7 @@
   },
   {
    "id": "9",
-   "x": 18.9,
+   "x": 17.9,
    "y": 2.05,
    "w": 1,
    "h": 1.0,
@@ -460,7 +394,7 @@
   },
   {
    "id": "0",
-   "x": 19.9,
+   "x": 18.9,
    "y": 2.05,
    "w": 1,
    "h": 1.0,
@@ -470,7 +404,7 @@
   },
   {
    "id": "y",
-   "x": 15.9,
+   "x": 14.9,
    "y": 3.05,
    "w": 1,
    "h": 1.0,
@@ -479,7 +413,7 @@
   },
   {
    "id": "u",
-   "x": 16.9,
+   "x": 15.9,
    "y": 3.05,
    "w": 1,
    "h": 1.0,
@@ -488,7 +422,7 @@
   },
   {
    "id": "i",
-   "x": 17.9,
+   "x": 16.9,
    "y": 3.05,
    "w": 1,
    "h": 1.0,
@@ -497,7 +431,7 @@
   },
   {
    "id": "o",
-   "x": 18.9,
+   "x": 17.9,
    "y": 3.05,
    "w": 1,
    "h": 1.0,
@@ -506,7 +440,7 @@
   },
   {
    "id": "p",
-   "x": 19.9,
+   "x": 18.9,
    "y": 3.05,
    "w": 1,
    "h": 1.0,
@@ -515,7 +449,7 @@
   },
   {
    "id": "h",
-   "x": 15.9,
+   "x": 14.9,
    "y": 4.05,
    "w": 1,
    "h": 1.0,
@@ -524,7 +458,7 @@
   },
   {
    "id": "j",
-   "x": 16.9,
+   "x": 15.9,
    "y": 4.05,
    "w": 1,
    "h": 1.0,
@@ -533,7 +467,7 @@
   },
   {
    "id": "k",
-   "x": 17.9,
+   "x": 16.9,
    "y": 4.05,
    "w": 1,
    "h": 1.0,
@@ -542,7 +476,7 @@
   },
   {
    "id": "l",
-   "x": 18.9,
+   "x": 17.9,
    "y": 4.05,
    "w": 1,
    "h": 1.0,
@@ -551,7 +485,7 @@
   },
   {
    "id": "semicolon",
-   "x": 19.9,
+   "x": 18.9,
    "y": 4.05,
    "w": 1,
    "h": 1.0,
@@ -561,7 +495,7 @@
   },
   {
    "id": "n",
-   "x": 15.9,
+   "x": 14.9,
    "y": 5.05,
    "w": 1,
    "h": 1.0,
@@ -570,7 +504,7 @@
   },
   {
    "id": "m",
-   "x": 16.9,
+   "x": 15.9,
    "y": 5.05,
    "w": 1,
    "h": 1.0,
@@ -579,7 +513,7 @@
   },
   {
    "id": "comma",
-   "x": 17.9,
+   "x": 16.9,
    "y": 5.05,
    "w": 1,
    "h": 1.0,
@@ -589,7 +523,7 @@
   },
   {
    "id": "dot",
-   "x": 18.9,
+   "x": 17.9,
    "y": 5.05,
    "w": 1,
    "h": 1.0,
@@ -599,7 +533,7 @@
   },
   {
    "id": "slash",
-   "x": 19.9,
+   "x": 18.9,
    "y": 5.05,
    "w": 1,
    "h": 1.0,
@@ -609,7 +543,7 @@
   },
   {
    "id": "space-right",
-   "x": 15.9,
+   "x": 14.9,
    "y": 6.05,
    "w": 5,
    "h": 1.25,
@@ -668,64 +602,54 @@
    "style": "mod"
   },
   {
-   "id": "mute",
+   "id": "minus",
    "x": 14.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Mute",
-   "code": "KEY_MUTE",
-   "style": "mod"
+   "label": "-",
+   "code": "KEY_MINUS",
+   "sub": "_"
   },
   {
-   "id": "volumedown",
+   "id": "leftbrace",
    "x": 15.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Vol-",
-   "code": "KEY_VOLUMEDOWN",
-   "style": "mod"
+   "label": "[",
+   "code": "KEY_LEFTBRACE",
+   "sub": "{"
   },
   {
-   "id": "volumeup",
+   "id": "rightbrace",
    "x": 16.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Vol+",
-   "code": "KEY_VOLUMEUP",
-   "style": "mod"
+   "label": "]",
+   "code": "KEY_RIGHTBRACE",
+   "sub": "}"
   },
   {
-   "id": "previoussong",
+   "id": "backslash",
    "x": 17.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Prev",
-   "code": "KEY_PREVIOUSSONG",
-   "style": "mod"
+   "label": "\\",
+   "code": "KEY_BACKSLASH",
+   "sub": "|"
   },
   {
-   "id": "playpause",
+   "id": "apostrophe",
    "x": 18.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Play",
-   "code": "KEY_PLAYPAUSE",
-   "style": "mod"
-  },
-  {
-   "id": "nextsong",
-   "x": 19.9,
-   "y": 0.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "Next",
-   "code": "KEY_NEXTSONG",
-   "style": "mod"
+   "label": "'",
+   "code": "KEY_APOSTROPHE",
+   "sub": "\""
   },
   {
    "id": "f6",
@@ -884,24 +808,30 @@
    "style": "mod"
   },
   {
-   "id": "brightnessdown",
+   "id": "pause",
    "x": 12.7,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Bri-",
-   "code": "KEY_BRIGHTNESSDOWN",
+   "label": "Pause",
+   "code": "KEY_PAUSE",
    "style": "mod"
   },
   {
-   "id": "brightnessup",
+   "id": "f7",
    "x": 13.7,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "Bri+",
-   "code": "KEY_BRIGHTNESSUP",
-   "style": "mod"
+   "label": "F7",
+   "code": "KEY_F7",
+   "layers": {
+    "fn": {
+     "code": "KEY_PREVIOUSSONG",
+     "label": "Prev"
+    }
+   },
+   "style": "fkey"
   },
   {
    "id": "center-backspace-right",

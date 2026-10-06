@@ -51,7 +51,8 @@ class LayoutAndKeyboardTest {
         assertEquals(ls.y, rs.y); assertEquals(ls.w * ls.h, rs.w * rs.h)
         // Rarely used keys sit in a top row above the F row, which is set apart from the number row.
         val f1 = k("f1")
-        for (id in listOf("home", "end", "pageup", "pagedown", "capslock", "esc", "f6", "sysrq", "insert", "compose"))
+        for (id in listOf("home", "end", "pageup", "pagedown", "capslock", "esc", "f6", "f7", "sysrq", "insert", "compose",
+                "minus", "leftbrace", "rightbrace", "backslash", "apostrophe"))
             assertTrue(id, k(id).y + k(id).h < f1.y)
         assertTrue(k("1").y > f1.y + f1.h + 0.1f)
         for (id in listOf("home", "end", "pageup", "pagedown")) assertTrue(id, k(id).x + k(id).w <= k("t").x + 1)
