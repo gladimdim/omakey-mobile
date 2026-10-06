@@ -7,7 +7,7 @@
  "description": "Column-based QWERTY split for two thumbs: letters on the outer edges with a space bar under each half, mirrored islands with big Ctrl, Backspace and Shift on both sides, a U-shaped Enter bridging the split, and a top row for rarely used keys.",
  "width": 19.9,
  "height": 7.3,
- "splitAt": 10.7,
+ "splitAt": 9.95,
  "keys": [
   {
    "id": "f1",
@@ -602,18 +602,8 @@
    "style": "mod"
   },
   {
-   "id": "minus",
-   "x": 14.9,
-   "y": 0.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "-",
-   "code": "KEY_MINUS",
-   "sub": "_"
-  },
-  {
    "id": "leftbrace",
-   "x": 15.9,
+   "x": 14.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -623,7 +613,7 @@
   },
   {
    "id": "rightbrace",
-   "x": 16.9,
+   "x": 15.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -633,7 +623,7 @@
   },
   {
    "id": "backslash",
-   "x": 17.9,
+   "x": 16.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -643,13 +633,23 @@
   },
   {
    "id": "apostrophe",
-   "x": 18.9,
+   "x": 17.9,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
    "label": "'",
    "code": "KEY_APOSTROPHE",
    "sub": "\""
+  },
+  {
+   "id": "corner-backspace",
+   "x": 18.9,
+   "y": 0.0,
+   "w": 1,
+   "h": 0.85,
+   "label": "⌫",
+   "code": "KEY_BACKSPACE",
+   "style": "mod"
   },
   {
    "id": "f6",
@@ -685,6 +685,12 @@
    "h": 0.85,
    "label": "PrtSc",
    "code": "KEY_SYSRQ",
+   "layers": {
+    "fn": {
+     "code": "KEY_SCROLLLOCK",
+     "label": "ScrLk"
+    }
+   },
    "style": "mod"
   },
   {
@@ -695,6 +701,12 @@
    "h": 0.85,
    "label": "Ins",
    "code": "KEY_INSERT",
+   "layers": {
+    "fn": {
+     "code": "KEY_PAUSE",
+     "label": "Pause"
+    }
+   },
    "style": "mod"
   },
   {
@@ -798,28 +810,18 @@
    "style": "mod"
   },
   {
-   "id": "scrolllock",
+   "id": "rightalt",
    "x": 11.7,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
-   "label": "ScrLk",
-   "code": "KEY_SCROLLLOCK",
-   "style": "mod"
-  },
-  {
-   "id": "pause",
-   "x": 12.7,
-   "y": 0.0,
-   "w": 1,
-   "h": 0.85,
-   "label": "Pause",
-   "code": "KEY_PAUSE",
+   "label": "AltGr",
+   "code": "KEY_RIGHTALT",
    "style": "mod"
   },
   {
    "id": "f7",
-   "x": 13.7,
+   "x": 12.7,
    "y": 0.0,
    "w": 1,
    "h": 0.85,
@@ -832,6 +834,16 @@
     }
    },
    "style": "fkey"
+  },
+  {
+   "id": "minus",
+   "x": 13.7,
+   "y": 0.0,
+   "w": 1,
+   "h": 0.85,
+   "label": "-",
+   "code": "KEY_MINUS",
+   "sub": "_"
   },
   {
    "id": "center-backspace-right",
@@ -904,23 +916,33 @@
    "style": "mod"
   },
   {
-   "id": "delete",
+   "id": "center-ralt",
    "x": 12.7,
    "y": 6.05,
    "w": 1,
    "h": 1.25,
-   "label": "Del",
-   "code": "KEY_DELETE",
+   "label": "Alt",
+   "code": "KEY_LEFTALT",
    "style": "mod"
   },
   {
-   "id": "center-altgr",
+   "id": "center-rsuper",
    "x": 13.7,
    "y": 6.05,
    "w": 1,
    "h": 1.25,
-   "label": "AltGr",
-   "code": "KEY_RIGHTALT",
+   "label": "Super",
+   "code": "KEY_RIGHTMETA",
+   "style": "mod"
+  },
+  {
+   "id": "center-delete",
+   "x": 9.2,
+   "y": 1.0,
+   "w": 1.5,
+   "h": 2.05,
+   "label": "Del",
+   "code": "KEY_DELETE",
    "style": "mod"
   },
   {

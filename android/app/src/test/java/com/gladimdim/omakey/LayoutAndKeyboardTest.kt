@@ -40,7 +40,7 @@ class LayoutAndKeyboardTest {
         val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
         assertEquals("Omakey Pro", split.name)
         assertEquals(setOf("center-enter", "center-shift", "center-rshift", "center-ctrl", "center-rctrl", "center-super",
-            "center-alt", "center-altgr"),
+            "center-alt", "center-rsuper", "center-ralt", "rightalt"),
             split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
         // Mirrored islands: 2x2 Ctrl and Backspace on both, Shift twins.
         val lc = k("center-ctrl"); val rc = k("center-rctrl")
@@ -49,6 +49,21 @@ class LayoutAndKeyboardTest {
         assertEquals(14, lb.code); assertEquals(14, rb.code); assertEquals(lb.y, rb.y); assertEquals(lb.h, rb.h)
         val ls = k("center-shift"); val rs = k("center-rshift")
         assertEquals(ls.y, rs.y); assertEquals(ls.w * ls.h, rs.w * rs.h)
+        // Super and Alt mirror each other: outer Super, inner Alt on both islands.
+        val lsu = k("center-super"); val la = k("center-alt"); val ra = k("center-ralt"); val rsu = k("center-rsuper")
+        assertEquals(lsu.y, rsu.y); assertEquals(la.y, ra.y)
+        assertTrue(lsu.x < la.x && ra.x < rsu.x)
+        assertEquals(56, ra.code) // sends Left Alt: Alt even where Right Alt is AltGr
+        // Delete sits between the two Backspaces and bridges the split.
+        val del = k("center-delete")
+        assertEquals(lb.x + lb.w, del.x, 1e-4f); assertEquals(del.x + del.w, rb.x, 1e-4f)
+        assertEquals(lb.y, del.y); assertEquals(lb.h, del.h)
+        assertTrue(del.x < split.splitAt!! && del.x + del.w > split.splitAt!!)
+        // The one asymmetric key: a regular Backspace in the top right corner.
+        val corner = k("corner-backspace")
+        assertEquals(14, corner.code); assertEquals(1f, corner.w)
+        assertEquals(split.width, corner.x + corner.w, 1e-4f); assertEquals(0f, corner.y)
+        assertTrue(k("rightalt").y + k("rightalt").h < k("f1").y)
         // Rarely used keys sit in a top row above the F row, which is set apart from the number row.
         val f1 = k("f1")
         for (id in listOf("home", "end", "pageup", "pagedown", "capslock", "esc", "f6", "f7", "sysrq", "insert", "compose",
@@ -79,8 +94,8 @@ class LayoutAndKeyboardTest {
         val split = LayoutParser.parse(File(assets, "layouts/omakey-pro.json").readText(), keycodes)
         val at = split.splitAt!!
         assertTrue(at > 0 && at < split.width)
-        // Only Enter's bar crosses the split (it stretches with the gap).
-        assertEquals(listOf("center-enter"), split.keys.filter { it.x < at && it.x + it.w > at + 1e-4f }.map { it.id })
+        // Only Enter's bar and Delete cross the split (they stretch with the gap).
+        assertEquals(setOf("center-enter", "center-delete"), split.keys.filter { it.x < at && it.x + it.w > at + 1e-4f }.map { it.id }.toSet())
         val m = KeyboardModel(split, object : KeyboardModel.Sink {
             override fun keyDown(code: Int) {}
             override fun keyUp(code: Int) {}
