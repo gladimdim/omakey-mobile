@@ -4,16 +4,16 @@
  "id": "split-qwerty",
  "name": "Split QWERTY",
  "author": "Omakey",
- "description": "QWERTY split by hand with a space bar under each half, and a centre thumb cluster: arrows, Home/End, PgUp/PgDn, Ins/Del, and big Enter, Shift and Ctrl with Fn, Super and Alt.",
+ "description": "QWERTY split by hand with square letters and a space bar under each half. Every modifier is in the centre thumb cluster: big Enter, Shift and Ctrl with Fn, Super and Alt, under arrows, Home/End, PgUp/PgDn and Ins/Del.",
  "width": 21.75,
- "height": 8.85,
+ "height": 6.1,
  "keys": [
   {
    "id": "esc",
    "x": 0,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "Esc",
    "code": "KEY_ESC",
    "style": "mod"
@@ -23,7 +23,7 @@
    "x": 1,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F1",
    "code": "KEY_F1",
    "layers": {
@@ -39,7 +39,7 @@
    "x": 2,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F2",
    "code": "KEY_F2",
    "layers": {
@@ -55,7 +55,7 @@
    "x": 3,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F3",
    "code": "KEY_F3",
    "layers": {
@@ -71,7 +71,7 @@
    "x": 4,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F4",
    "code": "KEY_F4",
    "layers": {
@@ -87,7 +87,7 @@
    "x": 5,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F5",
    "code": "KEY_F5",
    "layers": {
@@ -103,7 +103,7 @@
    "x": 6,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F6",
    "code": "KEY_F6",
    "layers": {
@@ -117,9 +117,9 @@
   {
    "id": "grave",
    "x": 0,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "`",
    "code": "KEY_GRAVE",
    "sub": "~"
@@ -127,9 +127,9 @@
   {
    "id": "1",
    "x": 1,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "1",
    "code": "KEY_1",
    "sub": "!"
@@ -137,9 +137,9 @@
   {
    "id": "2",
    "x": 2,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "2",
    "code": "KEY_2",
    "sub": "@"
@@ -147,9 +147,9 @@
   {
    "id": "3",
    "x": 3,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "3",
    "code": "KEY_3",
    "sub": "#"
@@ -157,9 +157,9 @@
   {
    "id": "4",
    "x": 4,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "4",
    "code": "KEY_4",
    "sub": "$"
@@ -167,9 +167,9 @@
   {
    "id": "5",
    "x": 5,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "5",
    "code": "KEY_5",
    "sub": "%"
@@ -177,9 +177,9 @@
   {
    "id": "tab",
    "x": 0,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1.5,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Tab",
    "code": "KEY_TAB",
    "style": "mod"
@@ -187,54 +187,54 @@
   {
    "id": "q",
    "x": 1.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Q",
    "code": "KEY_Q"
   },
   {
    "id": "w",
    "x": 2.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "W",
    "code": "KEY_W"
   },
   {
    "id": "e",
    "x": 3.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "E",
    "code": "KEY_E"
   },
   {
    "id": "r",
    "x": 4.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "R",
    "code": "KEY_R"
   },
   {
    "id": "t",
    "x": 5.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "T",
    "code": "KEY_T"
   },
   {
    "id": "capslock",
    "x": 0,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1.75,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Caps",
    "code": "KEY_CAPSLOCK",
    "style": "mod"
@@ -242,129 +242,99 @@
   {
    "id": "a",
    "x": 1.75,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "A",
    "code": "KEY_A"
   },
   {
    "id": "s",
    "x": 2.75,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "S",
    "code": "KEY_S"
   },
   {
    "id": "d",
    "x": 3.75,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "D",
    "code": "KEY_D"
   },
   {
    "id": "f",
    "x": 4.75,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "F",
    "code": "KEY_F"
   },
   {
    "id": "g",
    "x": 5.75,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "G",
    "code": "KEY_G"
   },
   {
-   "id": "leftshift",
-   "x": 0,
-   "y": 5.75,
-   "w": 2.25,
-   "h": 1.55,
-   "label": "Shift",
-   "code": "KEY_LEFTSHIFT",
-   "style": "mod"
-  },
-  {
    "id": "z",
    "x": 2.25,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Z",
    "code": "KEY_Z"
   },
   {
    "id": "x",
    "x": 3.25,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "X",
    "code": "KEY_X"
   },
   {
    "id": "c",
    "x": 4.25,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "C",
    "code": "KEY_C"
   },
   {
    "id": "v",
    "x": 5.25,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "V",
    "code": "KEY_V"
   },
   {
    "id": "b",
    "x": 6.25,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "B",
    "code": "KEY_B"
   },
   {
-   "id": "leftctrl",
-   "x": 0,
-   "y": 7.3,
-   "w": 1.25,
-   "h": 1.55,
-   "label": "Ctrl",
-   "code": "KEY_LEFTCTRL",
-   "style": "mod"
-  },
-  {
-   "id": "leftmeta",
-   "x": 1.25,
-   "y": 7.3,
-   "w": 1,
-   "h": 1.55,
-   "label": "Super",
-   "code": "KEY_LEFTMETA",
-   "style": "mod"
-  },
-  {
    "id": "space",
    "x": 2.25,
-   "y": 7.3,
+   "y": 4.85,
    "w": 5,
-   "h": 1.55,
+   "h": 1.25,
    "label": "",
    "code": "KEY_SPACE",
    "style": "space"
@@ -374,7 +344,7 @@
    "x": 12.75,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F7",
    "code": "KEY_F7",
    "layers": {
@@ -390,7 +360,7 @@
    "x": 13.75,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F8",
    "code": "KEY_F8",
    "layers": {
@@ -406,7 +376,7 @@
    "x": 14.75,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F9",
    "code": "KEY_F9",
    "layers": {
@@ -422,7 +392,7 @@
    "x": 15.75,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F10",
    "code": "KEY_F10",
    "layers": {
@@ -438,7 +408,7 @@
    "x": 16.75,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F11",
    "code": "KEY_F11",
    "style": "fkey"
@@ -448,7 +418,7 @@
    "x": 17.75,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "F12",
    "code": "KEY_F12",
    "style": "fkey"
@@ -458,7 +428,7 @@
    "x": 18.75,
    "y": 0.0,
    "w": 1.5,
-   "h": 1.1,
+   "h": 0.85,
    "label": "PrtSc",
    "code": "KEY_SYSRQ",
    "style": "mod"
@@ -468,7 +438,7 @@
    "x": 20.25,
    "y": 0.0,
    "w": 1.5,
-   "h": 1.1,
+   "h": 0.85,
    "label": "Menu",
    "code": "KEY_COMPOSE",
    "style": "mod"
@@ -476,9 +446,9 @@
   {
    "id": "6",
    "x": 12.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "6",
    "code": "KEY_6",
    "sub": "^"
@@ -486,9 +456,9 @@
   {
    "id": "7",
    "x": 13.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "7",
    "code": "KEY_7",
    "sub": "&"
@@ -496,9 +466,9 @@
   {
    "id": "8",
    "x": 14.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "8",
    "code": "KEY_8",
    "sub": "*"
@@ -506,9 +476,9 @@
   {
    "id": "9",
    "x": 15.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "9",
    "code": "KEY_9",
    "sub": "("
@@ -516,9 +486,9 @@
   {
    "id": "0",
    "x": 16.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "0",
    "code": "KEY_0",
    "sub": ")"
@@ -526,9 +496,9 @@
   {
    "id": "minus",
    "x": 17.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "-",
    "code": "KEY_MINUS",
    "sub": "_"
@@ -536,9 +506,9 @@
   {
    "id": "equal",
    "x": 18.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "=",
    "code": "KEY_EQUAL",
    "sub": "+"
@@ -546,9 +516,9 @@
   {
    "id": "backspace",
    "x": 19.75,
-   "y": 1.1,
+   "y": 0.85,
    "w": 2,
-   "h": 1.55,
+   "h": 1.0,
    "label": "⌫",
    "code": "KEY_BACKSPACE",
    "style": "mod"
@@ -556,54 +526,54 @@
   {
    "id": "y",
    "x": 13.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Y",
    "code": "KEY_Y"
   },
   {
    "id": "u",
    "x": 14.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "U",
    "code": "KEY_U"
   },
   {
    "id": "i",
    "x": 15.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "I",
    "code": "KEY_I"
   },
   {
    "id": "o",
    "x": 16.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "O",
    "code": "KEY_O"
   },
   {
    "id": "p",
    "x": 17.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "P",
    "code": "KEY_P"
   },
   {
    "id": "leftbrace",
    "x": 18.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "[",
    "code": "KEY_LEFTBRACE",
    "sub": "{"
@@ -611,9 +581,9 @@
   {
    "id": "rightbrace",
    "x": 19.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "]",
    "code": "KEY_RIGHTBRACE",
    "sub": "}"
@@ -621,9 +591,9 @@
   {
    "id": "backslash",
    "x": 20.25,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1.5,
-   "h": 1.55,
+   "h": 1.0,
    "label": "\\",
    "code": "KEY_BACKSLASH",
    "sub": "|"
@@ -631,45 +601,45 @@
   {
    "id": "h",
    "x": 13.5,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "H",
    "code": "KEY_H"
   },
   {
    "id": "j",
    "x": 14.5,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "J",
    "code": "KEY_J"
   },
   {
    "id": "k",
    "x": 15.5,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "K",
    "code": "KEY_K"
   },
   {
    "id": "l",
    "x": 16.5,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "L",
    "code": "KEY_L"
   },
   {
    "id": "semicolon",
    "x": 17.5,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": ";",
    "code": "KEY_SEMICOLON",
    "sub": ":"
@@ -677,47 +647,37 @@
   {
    "id": "apostrophe",
    "x": 18.5,
-   "y": 4.2,
+   "y": 2.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "'",
    "code": "KEY_APOSTROPHE",
    "sub": "\""
   },
   {
-   "id": "enter",
-   "x": 19.5,
-   "y": 4.2,
-   "w": 2.25,
-   "h": 1.55,
-   "label": "Enter",
-   "code": "KEY_ENTER",
-   "style": "accent"
-  },
-  {
    "id": "n",
    "x": 14.0,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "N",
    "code": "KEY_N"
   },
   {
    "id": "m",
    "x": 15.0,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "M",
    "code": "KEY_M"
   },
   {
    "id": "comma",
    "x": 16.0,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": ",",
    "code": "KEY_COMMA",
    "sub": "<"
@@ -725,9 +685,9 @@
   {
    "id": "dot",
    "x": 17.0,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": ".",
    "code": "KEY_DOT",
    "sub": ">"
@@ -735,59 +695,29 @@
   {
    "id": "slash",
    "x": 18.0,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "/",
    "code": "KEY_SLASH",
    "sub": "?"
   },
   {
-   "id": "rightshift",
-   "x": 19.0,
-   "y": 5.75,
-   "w": 2.75,
-   "h": 1.55,
-   "label": "Shift",
-   "code": "KEY_RIGHTSHIFT",
-   "style": "mod"
-  },
-  {
    "id": "space-2",
    "x": 14.0,
-   "y": 7.3,
+   "y": 4.85,
    "w": 5,
-   "h": 1.55,
+   "h": 1.25,
    "label": "",
    "code": "KEY_SPACE",
    "style": "space"
-  },
-  {
-   "id": "rightalt",
-   "x": 19.0,
-   "y": 7.3,
-   "w": 1.25,
-   "h": 1.55,
-   "label": "AltGr",
-   "code": "KEY_RIGHTALT",
-   "style": "mod"
-  },
-  {
-   "id": "rightctrl",
-   "x": 20.25,
-   "y": 7.3,
-   "w": 1.5,
-   "h": 1.55,
-   "label": "Ctrl",
-   "code": "KEY_RIGHTCTRL",
-   "style": "mod"
   },
   {
    "id": "pageup",
    "x": 7.5,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "PgUp",
    "code": "KEY_PAGEUP",
    "style": "mod"
@@ -797,7 +727,7 @@
    "x": 8.5,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "Home",
    "code": "KEY_HOME",
    "style": "mod"
@@ -807,7 +737,7 @@
    "x": 9.5,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "↑",
    "code": "KEY_UP",
    "style": "mod"
@@ -817,7 +747,7 @@
    "x": 10.5,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "End",
    "code": "KEY_END",
    "style": "mod"
@@ -827,7 +757,7 @@
    "x": 11.5,
    "y": 0.0,
    "w": 1,
-   "h": 1.1,
+   "h": 0.85,
    "label": "PgDn",
    "code": "KEY_PAGEDOWN",
    "style": "mod"
@@ -835,9 +765,9 @@
   {
    "id": "insert",
    "x": 7.5,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Ins",
    "code": "KEY_INSERT",
    "style": "mod"
@@ -845,9 +775,9 @@
   {
    "id": "left",
    "x": 8.5,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "←",
    "code": "KEY_LEFT",
    "style": "mod"
@@ -855,9 +785,9 @@
   {
    "id": "down",
    "x": 9.5,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "↓",
    "code": "KEY_DOWN",
    "style": "mod"
@@ -865,9 +795,9 @@
   {
    "id": "right",
    "x": 10.5,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "→",
    "code": "KEY_RIGHT",
    "style": "mod"
@@ -875,9 +805,9 @@
   {
    "id": "delete",
    "x": 11.5,
-   "y": 1.1,
+   "y": 0.85,
    "w": 1,
-   "h": 1.55,
+   "h": 1.0,
    "label": "Del",
    "code": "KEY_DELETE",
    "style": "mod"
@@ -885,9 +815,9 @@
   {
    "id": "center-shift",
    "x": 7.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 2,
-   "h": 3.1,
+   "h": 2.0,
    "label": "Shift",
    "code": "KEY_LEFTSHIFT",
    "style": "mod"
@@ -895,9 +825,9 @@
   {
    "id": "fn",
    "x": 9.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 1,
-   "h": 3.1,
+   "h": 2.0,
    "label": "Fn",
    "layer": "fn",
    "style": "mod"
@@ -905,9 +835,9 @@
   {
    "id": "center-enter",
    "x": 10.5,
-   "y": 2.65,
+   "y": 1.85,
    "w": 2,
-   "h": 4.65,
+   "h": 3.0,
    "label": "Enter",
    "code": "KEY_ENTER",
    "style": "accent"
@@ -915,9 +845,9 @@
   {
    "id": "center-ctrl",
    "x": 7.5,
-   "y": 5.75,
+   "y": 3.85,
    "w": 2,
-   "h": 3.1,
+   "h": 2.25,
    "label": "Ctrl",
    "code": "KEY_LEFTCTRL",
    "style": "mod"
@@ -925,9 +855,9 @@
   {
    "id": "center-super",
    "x": 9.5,
-   "y": 5.75,
+   "y": 3.85,
    "w": 1,
-   "h": 3.1,
+   "h": 2.25,
    "label": "Super",
    "code": "KEY_LEFTMETA",
    "style": "mod"
@@ -935,9 +865,9 @@
   {
    "id": "center-alt",
    "x": 10.5,
-   "y": 7.3,
+   "y": 4.85,
    "w": 2,
-   "h": 1.55,
+   "h": 1.25,
    "label": "Alt",
    "code": "KEY_LEFTALT",
    "style": "mod"

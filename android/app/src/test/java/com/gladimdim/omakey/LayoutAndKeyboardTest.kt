@@ -36,16 +36,23 @@ class LayoutAndKeyboardTest {
         val split = LayoutParser.parse(File(assets, "layouts/split-qwerty.json").readText(), keycodes)
         assertEquals(2, split.keys.count { it.code == 57 })
         val enter = split.keys.first { it.id == "center-enter" }
-        // The centre Enter is the biggest key, and Shift/Ctrl there are big too.
-        assertTrue(split.keys.all { it === enter || it.w * it.h < enter.w * enter.h })
-        for (id in listOf("center-shift", "center-ctrl")) {
-            val k = split.keys.first { it.id == id }
-            assertTrue(k.w * k.h >= 2 * 2 * 1.5f)
-        }
+        val shift = split.keys.first { it.id == "center-shift" }
+        val ctrl = split.keys.first { it.id == "center-ctrl" }
+        // Modifiers and Enter exist only in the centre cluster.
+        val modifiers = setOf(28, 29, 42, 54, 56, 97, 100, 125, 126)
+        assertEquals(setOf("center-enter", "center-shift", "center-ctrl", "center-super", "center-alt"),
+            split.keys.filter { it.code in modifiers }.map { it.id }.toSet())
+        // Enter, Shift and Ctrl are the biggest keys there.
+        val centre = split.keys.filter { it.x >= shift.x && it.x < enter.x + enter.w }
+        val big = setOf(enter, shift, ctrl)
+        val smallestBig = big.minOf { it.w * it.h }
+        assertTrue(centre.filter { it !in big }.all { it.w * it.h < smallestBig })
+        // Letters are square.
+        assertTrue(split.keys.filter { it.label.length == 1 && it.label[0].isLetter() }.all { it.w == 1f && it.h == 1f })
         // T is on the left of the centre cluster, Y on the right.
         val t = split.keys.first { it.id == "t" }
         val y = split.keys.first { it.id == "y" }
-        assertTrue(t.x + t.w <= enter.x - 3 && y.x >= enter.x + enter.w)
+        assertTrue(t.x + t.w <= shift.x && y.x >= enter.x + enter.w)
     }
 
     @Test
