@@ -1,0 +1,69 @@
+{
+  "ack": {
+    "client_time_ms": 1016,
+    "counter": 1,
+    "last_eseq": 2,
+    "packet": "4f4b010401020304050607080badcafe00000000000000011a399d2b1734170ae355964dbead3609722cf0d2bd79"
+  },
+  "bye": {
+    "counter": 3,
+    "packet": "4f4b010501020304050607080badcafe000000000000000395be763ad8bab1ddc7dd7c39f25fc14f"
+  },
+  "client_random": "101112131415161718191a1b1c1d1e1f",
+  "description": "Protocol v1 vectors. Hex unless noted. All packets are full datagrams.",
+  "device_id": "0102030405060708",
+  "device_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "hello": {
+    "name": "Pixel 9",
+    "nonce": "303132333435363738393a3b",
+    "packet": "4f4b01010102030405060708303132333435363738393a3ba32423d3fd7a5c14322a94f70e8420779b77262fa652643c2614b13db5382c5f2c68b672108e39d8cc",
+    "platform": 1
+  },
+  "host_id": "a0a1a2a3a4a5a6a7",
+  "input1": {
+    "client_time_ms": 1000,
+    "counter": 1,
+    "events": [
+      [
+        1,
+        125,
+        1
+      ]
+    ],
+    "held": [
+      125
+    ],
+    "packet": "4f4b010301020304050607080badcafe00000000000000017760fe954eeca0e9157c387278c67014c0f99006827fb066c773b00ef4f6"
+  },
+  "input2": {
+    "client_time_ms": 1016,
+    "counter": 2,
+    "events": [
+      [
+        1,
+        125,
+        1
+      ],
+      [
+        2,
+        57,
+        1
+      ]
+    ],
+    "held": [
+      57,
+      125
+    ],
+    "packet": "4f4b010301020304050607080badcafe00000000000000027aba8c0556ad78610827c7d4e57542528231b433d456751059b560aa3d92fc010ef7b61e4a"
+  },
+  "kcs": "3f0ca59f34ce11b84c87473cb9032aaf86714c4698dff613e2018e5aa1ac3a79",
+  "ksc": "c50902bbe11d132e8610d87f016cb45abbfaeb7e7e81f705785f0d5295adb281",
+  "pair_uri": "omakey://pair?v=1&h=a0a1a2a3a4a5a6a7&n=omarchy%20desk&a=192.168.50.219,100.67.193.30&p=47800&d=0102030405060708&k=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "server_random": "202122232425262728292a2b2c2d2e2f",
+  "session_id": 195939070,
+  "welcome": {
+    "host_name": "omarchy desk",
+    "nonce": "404142434445464748494a4b",
+    "packet": "4f4b01020102030405060708404142434445464748494a4bf2a8bc3032299114d5dd0d2d87790d4459e7707f931029045f6e64cebb3ec3f493a53952d2d6b23553976316b169baa9a0e79ff296535c54c43631f421936d2871"
+  }
+}

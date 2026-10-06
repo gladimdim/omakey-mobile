@@ -1,0 +1,21 @@
+# Android / Gradle
+.gradle/
+build/
+local.properties
+.kotlin/
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing — never commit
+*.keystore
+*.jks
+keystore.properties
+
+# iOS (planned)
+ios/**/xcuserdata/
+ios/**/DerivedData/
+
+.DS_Store

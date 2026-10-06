@@ -1,0 +1,112 @@
+package com.gladimdim.omakey.protocol
+
+/**
+ * What the phone holds right now, and the press/release events the server
+ * hasn't acknowledged yet. The touch thread calls [press]/[release]; the
+ * network thread calls [buildInput]/[ack]. Every method is synchronized.
+ *
+ * Two keys in a layout may share a code, so held codes are reference
+ * counted: the server sees one press when the first finger lands and one
+ * release when the last lifts.
+ */
+class KeyState {
+    private val counts = IntArray(MAX_CODE + 1)
+    /** Held codes in ascending order, as PROTOCOL.md sends them. */
+    private val heldOrder = IntArray(MAX_HELD)
+    private var heldCount = 0
+
+    private val pending = ArrayDeque<KeyEvent>()
+    private var nextEseq = 1
+
+    /** Bumped on every change, so the sender knows to transmit now. */
+    @Volatile
+    var version = 0L
+        private set
+
+    @Synchronized
+    fun press(code: Int): Boolean {
+        if (code !in 1..MAX_CODE) return false
+        if (counts[code]++ > 0) return false
+        if (heldCount < MAX_HELD) insertHeld(code)
+        addEvent(code, 1)
+        return true
+    }
+
+    @Synchronized
+    fun release(code: Int): Boolean {
+        if (code !in 1..MAX_CODE || counts[code] == 0) return false
+        if (--counts[code] > 0) return false
+        removeHeld(code)
+        addEvent(code, 0)
+        return true
+    }
+
+    /** Lets go of everything, sending a release for each held key. */
+    @Synchronized
+    fun releaseAll() {
+        while (heldCount > 0) {
+            val code = heldOrder[heldCount - 1]
+            counts[code] = 1
+            release(code)
+        }
+        counts.fill(0)
+    }
+
+    /** A new session starts: sequence numbers restart, old events are moot. */
+    @Synchronized
+    fun resetSession() {
+        pending.clear()
+        nextEseq = 1
+        version++
+    }
+
+    @Synchronized
+    fun ack(lastEseq: Int) {
+        while (pending.isNotEmpty() && !Wire.eseqNewer(pending.first().eseq, lastEseq)) pending.removeFirst()
+    }
+
+    @get:Synchronized
+    val hasUnacked: Boolean get() = pending.isNotEmpty()
+
+    @get:Synchronized
+    val isHolding: Boolean get() = heldCount > 0
+
+    @Synchronized
+    fun held(): IntArray = heldOrder.copyOf(heldCount)
+
+    @Synchronized
+    fun buildInput(clientTimeMs: Int): Input = Input(clientTimeMs, 0, heldOrder.copyOf(heldCount), pending.toList())
+
+    private fun addEvent(code: Int, value: Int) {
+        pending.addLast(KeyEvent(nextEseq, code, value))
+        nextEseq = (nextEseq + 1) and 0xFFFF
+        // Over the cap, drop the oldest; the held set still repairs the state.
+        while (pending.size > Wire.MAX_EVENTS) pending.removeFirst()
+        version++
+    }
+
+    private fun insertHeld(code: Int) {
+        var i = heldCount
+        while (i > 0 && heldOrder[i - 1] > code) {
+            heldOrder[i] = heldOrder[i - 1]
+            i--
+        }
+        heldOrder[i] = code
+        heldCount++
+    }
+
+    private fun removeHeld(code: Int) {
+        for (i in 0 until heldCount) {
+            if (heldOrder[i] == code) {
+                System.arraycopy(heldOrder, i + 1, heldOrder, i, heldCount - i - 1)
+                heldCount--
+                return
+            }
+        }
+    }
+
+    companion object {
+        const val MAX_CODE = 0x2FF
+        const val MAX_HELD = 64
+    }
+}
