@@ -116,8 +116,12 @@ handle or press Back to return):
 - one finger moves the pointer; a tap clicks; tap and hold right-clicks
 - two fingers scroll, content following the fingers; a two-finger tap
   right-clicks, a three-finger tap middle-clicks
-- Left, Middle and Right buttons along the bottom are held while touched,
-  so hold Left and move with another finger to drag
+- the bottom row is Ctrl, Shift, Left, Middle, Right, Shift, Ctrl, held
+  while touched: hold Left and move with another finger to drag, or hold
+  Ctrl and scroll to zoom. Swipe up from the row to put the touchpad away
+- a vertical slider on each side sets the pointer speed; the chip at the
+  top picks a preset for your monitor (laptop, 1080p, 1440p, 3440×1440
+  ultrawide, 4K, 5120×1440…). Each computer keeps its own speed
 
 It needs omakeyd 0.3 or newer on the computer (the bar widget offers the
 update); with an older one the touchpad says so.

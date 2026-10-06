@@ -23,8 +23,8 @@ android {
         applicationId = "com.gladimdim.omakey"
         minSdk = 29
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.9.0"
+        versionCode = 15
+        versionName = "0.9.2"
     }
 
     signingConfigs {

@@ -119,7 +119,25 @@ class KeyboardActivity : Activity() {
         keyboard = KeyboardView(this)
 
         // The touchpad lives above the keyboard and slides down over it.
-        touchpad = TouchpadView(this).apply { sink = padSink }
+        touchpad = TouchpadView(this).apply {
+            sink = padSink
+            onSensitivityChanged = { v ->
+                padPrefs.edit().putFloat("sens:${host.hostId}", v).putString("preset:${host.hostId}", CUSTOM).apply()
+                presetName = CUSTOM
+            }
+            onPresetsRequested = ::pickPreset
+            // Swiping up from the bottom row drags the touchpad back up.
+            panelDrag = object : TouchpadView.PanelDrag {
+                override fun drag(dy: Float) {
+                    panel.animate().cancel()
+                    panel.translationY = dy.coerceIn(-stage.height.toFloat(), 0f)
+                }
+
+                override fun release(dy: Float, flungUp: Boolean) {
+                    setPad(!(flungUp || -dy > stage.height * 0.25f))
+                }
+            }
+        }
         panel = FrameLayout(this).apply {
             setBackgroundColor(Palette.BG)
             visibility = View.INVISIBLE
@@ -154,6 +172,7 @@ class KeyboardActivity : Activity() {
             addView(stage, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         }
         setContentView(root)
+        applyPadSettings()
         keyboard.setLayout(layouts.selected(), sink)
         renderStatus()
     }
@@ -249,6 +268,7 @@ class KeyboardActivity : Activity() {
         linkState = KeyboardLink.State.CONNECTING
         pingMs = -1
         hosts.put(next) // most recently used first on the connect screen
+        applyPadSettings()
         renderStatus()
         connect()
     }
@@ -340,6 +360,32 @@ class KeyboardActivity : Activity() {
         return true
     }
 
+    private val padPrefs by lazy { getSharedPreferences("touchpad", MODE_PRIVATE) }
+
+    /** Each computer keeps its own touchpad speed: their monitors differ. */
+    private fun applyPadSettings() {
+        val d = PointerPresets.default
+        touchpad.sensitivity = padPrefs.getFloat("sens:${host.hostId}", d.sensitivity)
+        touchpad.presetName = padPrefs.getString("preset:${host.hostId}", d.name) ?: d.name
+    }
+
+    private fun pickPreset() {
+        val presets = PointerPresets.all
+        val labels = presets.map { p ->
+            val mark = if (p.name == touchpad.presetName) "● " else "   "
+            "$mark${p.name}  ·  ${p.sensitivity}×\n     ${p.detail}"
+        }.toTypedArray()
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Pointer speed for ${host.name}")
+            .setItems(labels) { _, i ->
+                val p = presets[i]
+                padPrefs.edit().putFloat("sens:${host.hostId}", p.sensitivity).putString("preset:${host.hostId}", p.name).apply()
+                applyPadSettings()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun setPad(open: Boolean) {
         val h = stage.height.toFloat()
         if (open && !padOpen) keyboard.releaseAll()
@@ -386,5 +432,6 @@ class KeyboardActivity : Activity() {
 
     companion object {
         const val EXTRA_HOST = "host"
+        private const val CUSTOM = "Custom"
     }
 }

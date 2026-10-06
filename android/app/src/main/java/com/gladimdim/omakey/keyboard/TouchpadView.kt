@@ -13,15 +13,18 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
- * A laptop touchpad: a surface that moves the desktop's pointer, with
- * Left / Middle / Right buttons along the bottom edge.
+ * A laptop touchpad: a surface that moves the desktop's pointer, and a row
+ * along the bottom edge: Ctrl, Shift, Left, Middle, Right, Shift, Ctrl.
  *
  * - One finger moves the pointer. A quick tap clicks; tap and hold
  *   right-clicks (a context menu).
  * - Two fingers scroll, both ways, content following the fingers. A
  *   two-finger tap right-clicks; a three-finger tap middle-clicks.
- * - The buttons are held for as long as a finger is on them, so dragging
- *   is: hold Left with one finger, move with another.
+ * - The bottom row is held for as long as a finger is on it, so dragging is:
+ *   hold Left with one finger, move with another; Ctrl/Shift + click works
+ *   the same way. A press is sent when the finger lifts or after a short
+ *   hold, because swiping up from the row instead puts the touchpad away
+ *   (without clicking anything).
  */
 class TouchpadView(context: Context) : View(context) {
     interface Sink {
@@ -33,6 +36,35 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     var sink: Sink? = null
+
+    /** Swiping up from the bottom row drags the touchpad away. */
+    interface PanelDrag {
+        /** The finger is [dy] px from where it started (negative: up). */
+        fun drag(dy: Float)
+        fun release(dy: Float, flungUp: Boolean)
+    }
+
+    var panelDrag: PanelDrag? = null
+
+    /** Pointer speed multiplier, set by the side sliders or a preset. */
+    var sensitivity = 1f
+        set(value) {
+            field = value.coerceIn(MIN_SENS, MAX_SENS)
+            invalidate()
+        }
+
+    /** The preset the sensitivity came from, or "Custom". Shown in the chip. */
+    var presetName = ""
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /** The slider moved; the activity saves it and marks the preset Custom. */
+    var onSensitivityChanged: ((Float) -> Unit)? = null
+
+    /** The preset chip was tapped. */
+    var onPresetsRequested: (() -> Unit)? = null
 
     /** False while the computer's omakeyd is too old for the touchpad. */
     var supported = true
@@ -46,12 +78,24 @@ class TouchpadView(context: Context) : View(context) {
     private val motionScale = 1.1f
     private val scrollScale = 2.4f // 1/120-notch units per pixel: a notch every 50 px
 
-    // Geometry.
+    // Geometry: the pad, a sensitivity slider down each side, the preset chip,
+    // and the bottom row, mirrored around the Middle button.
     private val pad = RectF()
-    private val buttons = arrayOf(RectF(), RectF(), RectF())
-    private val buttonCodes = intArrayOf(Wire.BTN_LEFT, Wire.BTN_MIDDLE, Wire.BTN_RIGHT)
-    private val buttonLabels = arrayOf("Left", "", "Right")
-    private val buttonHeld = IntArray(3)
+    private val sliders = arrayOf(RectF(), RectF())
+    private val chip = RectF()
+    private val buttonCodes = intArrayOf(
+        KEY_LEFTCTRL, KEY_LEFTSHIFT, Wire.BTN_LEFT, Wire.BTN_MIDDLE, Wire.BTN_RIGHT, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
+    )
+    private val buttonLabels = arrayOf("Ctrl", "Shift", "Left", "Middle", "Right", "Shift", "Ctrl")
+    private val buttonWeights = floatArrayOf(1f, 1.2f, 2.6f, 1.6f, 2.6f, 1.2f, 1f)
+    private val buttons = Array(buttonCodes.size) { RectF() }
+    private val buttonHeld = IntArray(buttonCodes.size)
+
+    // Bottom-row fingers not yet sent: they may still turn into a swipe.
+    private val pendingSince = LongArray(MAX_POINTERS)
+    private val buttonStartY = FloatArray(MAX_POINTERS)
+    private val buttonDownAt = LongArray(MAX_POINTERS)
+    private val swipeSlop = 14 * density
 
     // Pointers: what each finger is doing, and where it was last.
     private val role = IntArray(MAX_POINTERS) { NONE }
@@ -89,12 +133,20 @@ class TouchpadView(context: Context) : View(context) {
         val gap = 6 * density
         val buttonH = maxOf(56 * density, h * 0.2f)
         pad.set(gap, gap, w - gap, h - buttonH - gap * 2)
+        val sliderW = 30 * density
+        val inset = 8 * density
+        sliders[0].set(pad.left + inset, pad.top + inset, pad.left + inset + sliderW, pad.bottom - inset)
+        sliders[1].set(pad.right - inset - sliderW, pad.top + inset, pad.right - inset, pad.bottom - inset)
+        val chipW = 230 * density
+        chip.set(pad.centerX() - chipW / 2, pad.top + inset, pad.centerX() + chipW / 2, pad.top + inset + 30 * density)
         val top = h - buttonH - gap
-        val middleW = maxOf(56 * density, w * 0.1f)
-        val sideW = (w - gap * 4 - middleW) / 2
-        buttons[0].set(gap, top, gap + sideW, h - gap)
-        buttons[1].set(gap * 2 + sideW, top, gap * 2 + sideW + middleW, h - gap)
-        buttons[2].set(w - gap - sideW, top, w - gap, h - gap)
+        val unit = (w - gap * (buttons.size + 1)) / buttonWeights.sum()
+        var x = gap
+        for (i in buttons.indices) {
+            val bw = unit * buttonWeights[i]
+            buttons[i].set(x, top, x + bw, h - gap)
+            x += bw + gap
+        }
     }
 
     /** Let go of every button, e.g. when the touchpad is put away. */
@@ -105,8 +157,29 @@ class TouchpadView(context: Context) : View(context) {
             buttonHeld[i] = 0
         }
         role.fill(NONE)
+        pendingSince.fill(0)
         padFingers = 0
         invalidate()
+    }
+
+    private fun commitButton(b: Int) {
+        if (buttonHeld[b]++ == 0) {
+            sink?.button(buttonCodes[b], true)
+            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+        invalidate()
+    }
+
+    /** A bottom-row finger held long enough without swiping is pressed for real. */
+    private val commitPending = Runnable {
+        val now = android.os.SystemClock.uptimeMillis()
+        for (id in 0 until MAX_POINTERS) {
+            val since = pendingSince[id]
+            if (since != 0L && role[id] >= BUTTON && now - since >= COMMIT_MS) {
+                pendingSince[id] = 0
+                commitButton(role[id] - BUTTON)
+            }
+        }
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
@@ -126,14 +199,23 @@ class TouchpadView(context: Context) : View(context) {
         val y = ev.getY(index)
         lastX[id] = x
         lastY[id] = y
+        val sl = sliders.indexOfFirst { it.contains(x, y) || expanded(it).contains(x, y) }
+        if (sl >= 0) {
+            role[id] = SLIDER
+            slide(y)
+            return
+        }
+        if (chip.contains(x, y)) {
+            role[id] = CHIP
+            return
+        }
         val b = buttons.indexOfFirst { it.contains(x, y) }
         if (b >= 0) {
             role[id] = BUTTON + b
-            if (buttonHeld[b]++ == 0) {
-                sink?.button(buttonCodes[b], true)
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            }
-            invalidate()
+            pendingSince[id] = ev.eventTime
+            buttonDownAt[id] = ev.eventTime
+            buttonStartY[id] = y
+            postDelayed(commitPending, COMMIT_MS)
             return
         }
         role[id] = PAD
@@ -155,6 +237,21 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     private fun fingersMoved(ev: MotionEvent) {
+        // A bottom-row finger swiping up puts the touchpad away instead of pressing.
+        for (i in 0 until ev.pointerCount) {
+            val id = ev.getPointerId(i)
+            if (id !in 0 until MAX_POINTERS) continue
+            if (role[id] == SLIDER) {
+                slide(ev.getY(i))
+                continue
+            }
+            val dy = ev.getY(i) - buttonStartY[id]
+            if (role[id] >= BUTTON && pendingSince[id] != 0L && dy < -swipeSlop) {
+                pendingSince[id] = 0
+                role[id] = SWIPE
+            }
+            if (role[id] == SWIPE) panelDrag?.drag(dy)
+        }
         var sumDx = 0f
         var sumDy = 0f
         var n = 0
@@ -180,7 +277,7 @@ class TouchpadView(context: Context) : View(context) {
                 moving = true
                 removeCallbacks(longPress)
             }
-            if (moving) s.motion(dx * motionScale, dy * motionScale)
+            if (moving) s.motion(dx * motionScale * sensitivity, dy * motionScale * sensitivity)
         } else if (padFingers >= 2) {
             // Content follows the fingers: fingers up scrolls down.
             s.scroll(dy * scrollScale, -dx * scrollScale)
@@ -192,8 +289,24 @@ class TouchpadView(context: Context) : View(context) {
         if (id !in 0 until MAX_POINTERS) return
         val r = role[id]
         role[id] = NONE
+        if (r == SLIDER) return
+        if (r == CHIP) {
+            if (chip.contains(ev.getX(index), ev.getY(index))) onPresetsRequested?.invoke()
+            return
+        }
+        if (r == SWIPE) {
+            val dy = ev.getY(index) - buttonStartY[id]
+            val speed = dy / maxOf(1L, ev.eventTime - buttonDownAt[id])
+            panelDrag?.release(dy, speed < -FLING_PX_PER_MS * density)
+            return
+        }
         if (r >= BUTTON) {
             val b = r - BUTTON
+            if (pendingSince[id] != 0L) {
+                // Lifted before the hold timer: a click.
+                pendingSince[id] = 0
+                commitButton(b)
+            }
             if (buttonHeld[b] > 0 && --buttonHeld[b] == 0) sink?.button(buttonCodes[b], false)
             invalidate()
             return
@@ -208,6 +321,26 @@ class TouchpadView(context: Context) : View(context) {
             maxFingers == 1 && !moving && !longPressed && duration < TAP_MS -> click(Wire.BTN_LEFT)
             maxFingers == 2 && still && duration < MULTI_TAP_MS -> click(Wire.BTN_RIGHT)
             maxFingers == 3 && still && duration < MULTI_TAP_MS -> click(Wire.BTN_MIDDLE)
+        }
+    }
+
+    /** A slider's touch area is wider than its track. */
+    private fun expanded(r: RectF) = RectF(r.left - 10 * density, r.top, r.right + 10 * density, r.bottom)
+
+    /** Slider position (0 bottom .. 1 top) to sensitivity, on a log scale. */
+    private fun sensAt(t: Float) = (MIN_SENS * Math.pow((MAX_SENS / MIN_SENS).toDouble(), t.toDouble())).toFloat()
+
+    private fun posOf(sens: Float) =
+        (Math.log((sens / MIN_SENS).toDouble()) / Math.log((MAX_SENS / MIN_SENS).toDouble())).toFloat()
+
+    private fun slide(y: Float) {
+        val r = sliders[0]
+        val t = 1f - ((y - r.top) / r.height()).coerceIn(0f, 1f)
+        // Snap to one decimal, which is plenty and makes the label steady.
+        val v = (Math.round(sensAt(t) * 20) / 20f).coerceIn(MIN_SENS, MAX_SENS)
+        if (v != sensitivity) {
+            sensitivity = v
+            onSensitivityChanged?.invoke(v)
         }
     }
 
@@ -233,11 +366,36 @@ class TouchpadView(context: Context) : View(context) {
             }
             y += step
         }
+        // Sensitivity sliders, mirrored.
+        val t = posOf(sensitivity)
+        for (r in sliders) {
+            buttonPaint.color = Palette.KEY_MOD
+            canvas.drawRoundRect(r, r.width() / 2, r.width() / 2, buttonPaint)
+            val knobY = r.bottom - t * r.height()
+            buttonPaint.color = Palette.KEY_ACCENT
+            canvas.drawRoundRect(r.left, knobY, r.right, r.bottom, r.width() / 2, r.width() / 2, buttonPaint)
+            buttonPaint.color = Palette.ACCENT
+            canvas.drawCircle(r.centerX(), knobY.coerceIn(r.top + r.width() / 2, r.bottom - r.width() / 2), r.width() * 0.42f, buttonPaint)
+            textPaint.color = Palette.FG_DIM
+            textPaint.textSize = 10 * density
+            canvas.drawText("fast", r.centerX(), r.top - 2 * density + 12 * density, textPaint)
+            canvas.drawText("slow", r.centerX(), r.bottom - 6 * density, textPaint)
+        }
+        // The preset chip.
+        buttonPaint.color = Palette.KEY_MOD
+        canvas.drawRoundRect(chip, chip.height() / 2, chip.height() / 2, buttonPaint)
+        textPaint.color = Palette.ACCENT
+        textPaint.textSize = 12 * density
+        val chipText = "${presetName.ifEmpty { "Pointer speed" }} · ${"%.2f".format(sensitivity).trimEnd('0').trimEnd('.')}× ▾"
+        canvas.drawText(chipText, chip.centerX(), chip.centerY() - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
+
         textPaint.textSize = 13 * density
         if (supported) {
             textPaint.color = Palette.FG_DIM
             canvas.drawText("move · tap to click · hold for menu · two fingers scroll",
                 pad.centerX(), pad.centerY(), textPaint)
+            textPaint.textSize = 11 * density
+            canvas.drawText("swipe up on the buttons to hide", pad.centerX(), pad.bottom - 12 * density, textPaint)
         } else {
             textPaint.color = Palette.WARN
             canvas.drawText("Update Omakey on your computer to use the touchpad:",
@@ -248,20 +406,16 @@ class TouchpadView(context: Context) : View(context) {
         for (i in buttons.indices) {
             val r = buttons[i]
             val held = buttonHeld[i] > 0
-            buttonPaint.color = if (held) Palette.ACCENT else Palette.KEY_MOD
-            canvas.drawRoundRect(r, radius, radius, buttonPaint)
-            textPaint.color = if (held) Palette.BG else Palette.FG
-            textPaint.textSize = 15 * density
-            val label = buttonLabels[i]
-            if (label.isNotEmpty()) {
-                canvas.drawText(label, r.centerX(), r.centerY() - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
-            } else {
-                // The middle button: a small scroll-wheel mark.
-                val w = 6 * density
-                val h = 14 * density
-                canvas.drawRoundRect(r.centerX() - w / 2, r.centerY() - h / 2, r.centerX() + w / 2, r.centerY() + h / 2,
-                    w / 2, w / 2, textPaint)
+            val mouse = buttonCodes[i] in Wire.BTN_LEFT..Wire.BTN_MIDDLE
+            buttonPaint.color = when {
+                held -> Palette.ACCENT
+                mouse -> Palette.KEY
+                else -> Palette.KEY_MOD
             }
+            canvas.drawRoundRect(r, radius, radius, buttonPaint)
+            textPaint.color = if (held) Palette.BG else if (mouse) Palette.FG else Palette.FG_DIM
+            textPaint.textSize = 15 * density
+            canvas.drawText(buttonLabels[i], r.centerX(), r.centerY() - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
         }
     }
 
@@ -269,7 +423,18 @@ class TouchpadView(context: Context) : View(context) {
         const val MAX_POINTERS = 32
         const val NONE = 0
         const val PAD = 1
+        const val SWIPE = 2 // a bottom-row finger swiping the touchpad away
+        const val SLIDER = 3
+        const val CHIP = 4
+        const val MIN_SENS = 0.3f
+        const val MAX_SENS = 3f
         const val BUTTON = 10 // BUTTON + index into buttons
+        const val COMMIT_MS = 120L
+        const val FLING_PX_PER_MS = 0.5f // per density unit
+        const val KEY_LEFTCTRL = 29
+        const val KEY_LEFTSHIFT = 42
+        const val KEY_RIGHTSHIFT = 54
+        const val KEY_RIGHTCTRL = 97
         const val TAP_MS = 220L
         const val MULTI_TAP_MS = 300L
         const val LONG_PRESS_MS = 450L
