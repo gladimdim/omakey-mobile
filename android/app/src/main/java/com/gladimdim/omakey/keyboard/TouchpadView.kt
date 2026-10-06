@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
@@ -26,11 +25,8 @@ import kotlin.math.hypot
  *   Shift + Left. They are held while touched, so dragging, Ctrl-click
  *   multi-select and Shift-click range select work with the other thumb
  *   moving the pointer.
- * - Along the bottom: Ctrl, Shift, Left, Middle, Right, Shift, Ctrl, also
- *   held while touched. A press there is sent when the finger lifts or after
- *   a short hold, because swiping up from the row instead puts the touchpad
- *   away (without clicking anything).
- * - The pointer speed slider and its preset chip sit at the bottom centre.
+ * - A strip along the bottom holds the pointer speed: a preset chip and a
+ *   slider. Swiping up from the rest of the strip puts the touchpad away.
  */
 class TouchpadView(context: Context) : View(context) {
     interface Sink {
@@ -41,7 +37,7 @@ class TouchpadView(context: Context) : View(context) {
         fun scroll(v: Float, h: Float)
     }
 
-    /** Swiping up from the bottom row drags the touchpad away. */
+    /** Swiping up from the bottom strip drags the touchpad away. */
     interface PanelDrag {
         /** The finger is [dy] px from where it started (negative: up). */
         fun drag(dy: Float)
@@ -84,7 +80,7 @@ class TouchpadView(context: Context) : View(context) {
     private val motionScale = 1.1f
     private val scrollScale = 2.4f // 1/120-notch units per pixel: a notch every 50 px
 
-    private enum class Icon { NONE, LEFT, RIGHT }
+    private enum class Icon { LEFT, RIGHT }
 
     /** A button: the codes it holds (pressed in order, released in reverse). */
     private class Button(
@@ -92,37 +88,26 @@ class TouchpadView(context: Context) : View(context) {
         val label: String,
         val icon: Icon,
         val modifier: String?,
-        /** Bottom-row buttons wait a moment, so a swipe up can put the pad away. */
-        val deferred: Boolean,
-        val weight: Float = 1f,
     ) {
         val rect = RectF()
         var held = 0
     }
 
     private fun sideColumn() = listOf(
-        Button(intArrayOf(Wire.BTN_LEFT), "Left", Icon.LEFT, null, false),
-        Button(intArrayOf(Wire.BTN_RIGHT), "Right", Icon.RIGHT, null, false),
-        Button(intArrayOf(KEY_LEFTCTRL, Wire.BTN_LEFT), "Ctrl + Left", Icon.LEFT, "Ctrl", false),
-        Button(intArrayOf(KEY_LEFTSHIFT, Wire.BTN_LEFT), "Shift + Left", Icon.LEFT, "⇧", false),
+        Button(intArrayOf(Wire.BTN_LEFT), "Left", Icon.LEFT, null),
+        Button(intArrayOf(Wire.BTN_RIGHT), "Right", Icon.RIGHT, null),
+        Button(intArrayOf(KEY_LEFTCTRL, Wire.BTN_LEFT), "Ctrl + Left", Icon.LEFT, "Ctrl"),
+        Button(intArrayOf(KEY_LEFTSHIFT, Wire.BTN_LEFT), "Shift + Left", Icon.LEFT, "⇧"),
     )
 
-    // The same four down both sides (mirrored), then the bottom row.
+    // The same four down both sides, mirrored.
     private val leftColumn = sideColumn()
     private val rightColumn = sideColumn()
-    private val bottomRow = listOf(
-        Button(intArrayOf(KEY_LEFTCTRL), "Ctrl", Icon.NONE, null, true, 1f),
-        Button(intArrayOf(KEY_LEFTSHIFT), "Shift", Icon.NONE, null, true, 1.2f),
-        Button(intArrayOf(Wire.BTN_LEFT), "Left", Icon.NONE, null, true, 2.6f),
-        Button(intArrayOf(Wire.BTN_MIDDLE), "Middle", Icon.NONE, null, true, 1.6f),
-        Button(intArrayOf(Wire.BTN_RIGHT), "Right", Icon.NONE, null, true, 2.6f),
-        Button(intArrayOf(KEY_RIGHTSHIFT), "Shift", Icon.NONE, null, true, 1.2f),
-        Button(intArrayOf(KEY_RIGHTCTRL), "Ctrl", Icon.NONE, null, true, 1f),
-    )
-    private val buttons = leftColumn + rightColumn + bottomRow
+    private val buttons = leftColumn + rightColumn
 
     // Geometry.
     private val pad = RectF()
+    private val strip = RectF()
     private val slider = RectF()
     private val sliderTouch = RectF()
     private val chip = RectF()
@@ -133,10 +118,9 @@ class TouchpadView(context: Context) : View(context) {
     private val lastY = FloatArray(MAX_POINTERS)
     private var padFingers = 0
 
-    // Bottom-row fingers not yet sent: they may still turn into a swipe.
-    private val pendingSince = LongArray(MAX_POINTERS)
-    private val buttonStartY = FloatArray(MAX_POINTERS)
-    private val buttonDownAt = LongArray(MAX_POINTERS)
+    // Strip fingers that may become a swipe up.
+    private val swipeStartY = FloatArray(MAX_POINTERS)
+    private val swipeDownAt = LongArray(MAX_POINTERS)
 
     // The current pad gesture.
     private var gestureStart = 0L
@@ -156,18 +140,6 @@ class TouchpadView(context: Context) : View(context) {
         }
     }
 
-    /** A bottom-row finger held long enough without swiping is pressed for real. */
-    private val commitPending = Runnable {
-        val now = SystemClock.uptimeMillis()
-        for (id in 0 until MAX_POINTERS) {
-            val since = pendingSince[id]
-            if (since != 0L && role[id] >= BUTTON && now - since >= COMMIT_MS) {
-                pendingSince[id] = 0
-                press(buttons[role[id] - BUTTON])
-            }
-        }
-    }
-
     private val surfacePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.SURFACE }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.KEY }
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -184,45 +156,37 @@ class TouchpadView(context: Context) : View(context) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         val gap = 6 * density
-        val bottomH = maxOf(52 * density, h * 0.17f)
+        val stripH = 46 * density
         val columnW = maxOf(80 * density, w * 0.095f)
-        val bodyBottom = h - bottomH - gap * 2
 
-        // Side columns, mirrored.
+        // Side columns, full height, mirrored.
         for ((column, left) in listOf(leftColumn to gap, rightColumn to w - gap - columnW)) {
-            val cellH = (bodyBottom - gap - gap * (column.size - 1)) / column.size
+            val cellH = (h - gap * 2 - gap * (column.size - 1)) / column.size
             column.forEachIndexed { i, b ->
                 val top = gap + i * (cellH + gap)
                 b.rect.set(left, top, left + columnW, top + cellH)
             }
         }
-        pad.set(gap * 2 + columnW, gap, w - gap * 2 - columnW, bodyBottom)
+        pad.set(gap * 2 + columnW, gap, w - gap * 2 - columnW, h - gap * 2 - stripH)
+        strip.set(pad.left, pad.bottom + gap, pad.right, h - gap)
 
-        // Bottom row.
-        val unit = (w - gap * (bottomRow.size + 1)) / bottomRow.sumOf { it.weight.toDouble() }.toFloat()
-        var x = gap
-        for (b in bottomRow) {
-            val bw = unit * b.weight
-            b.rect.set(x, h - bottomH - gap, x + bw, h - gap)
-            x += bw + gap
-        }
-
-        // Speed: slider and preset chip at the bottom centre of the pad.
-        val sliderW = minOf(pad.width() * 0.5f, 340 * density)
-        val sliderH = 24 * density
-        slider.set(pad.centerX() - sliderW / 2, pad.bottom - 12 * density - sliderH,
-            pad.centerX() + sliderW / 2, pad.bottom - 12 * density)
-        sliderTouch.set(slider.left - 8 * density, slider.top - 10 * density,
-            slider.right + 8 * density, slider.bottom + 10 * density)
-        val chipW = minOf(pad.width() * 0.6f, 260 * density)
-        chip.set(pad.centerX() - chipW / 2, slider.top - 10 * density - 26 * density,
-            pad.centerX() + chipW / 2, slider.top - 10 * density)
+        // Speed in the strip: the preset chip, then the slider, centred together.
+        val chipW = minOf(strip.width() * 0.32f, 230 * density)
+        val sliderW = minOf(strip.width() * 0.42f, 320 * density)
+        val labels = 44 * density // room for "slow" and "fast"
+        val total = chipW + 16 * density + labels + sliderW + labels
+        var x = strip.centerX() - total / 2
+        val chipH = 28 * density
+        chip.set(x, strip.centerY() - chipH / 2, x + chipW, strip.centerY() + chipH / 2)
+        x += chipW + 16 * density + labels
+        val sliderH = 22 * density
+        slider.set(x, strip.centerY() - sliderH / 2, x + sliderW, strip.centerY() + sliderH / 2)
+        sliderTouch.set(slider.left - 8 * density, strip.top, slider.right + 8 * density, strip.bottom)
     }
 
     /** Let go of every button, e.g. when the touchpad is put away. */
     fun releaseAll() {
         removeCallbacks(longPress)
-        removeCallbacks(commitPending)
         for (b in buttons) {
             if (b.held > 0) {
                 b.held = 1
@@ -230,7 +194,6 @@ class TouchpadView(context: Context) : View(context) {
             }
         }
         role.fill(NONE)
-        pendingSince.fill(0)
         padFingers = 0
         invalidate()
     }
@@ -264,14 +227,13 @@ class TouchpadView(context: Context) : View(context) {
         val b = buttons.indexOfFirst { it.rect.contains(x, y) }
         if (b >= 0) {
             role[id] = BUTTON + b
-            if (buttons[b].deferred) {
-                pendingSince[id] = ev.eventTime
-                buttonDownAt[id] = ev.eventTime
-                buttonStartY[id] = y
-                postDelayed(commitPending, COMMIT_MS)
-            } else {
-                press(buttons[b])
-            }
+            press(buttons[b])
+            return
+        }
+        if (strip.contains(x, y)) {
+            role[id] = STRIP
+            swipeStartY[id] = y
+            swipeDownAt[id] = ev.eventTime
             return
         }
         if (!pad.contains(x, y)) return
@@ -302,12 +264,9 @@ class TouchpadView(context: Context) : View(context) {
             if (id !in 0 until MAX_POINTERS) continue
             when {
                 role[id] == SLIDER -> slide(ev.getX(i))
-                role[id] >= BUTTON && pendingSince[id] != 0L && ev.getY(i) - buttonStartY[id] < -swipeSlop -> {
-                    // A bottom-row finger swiping up puts the touchpad away instead of pressing.
-                    pendingSince[id] = 0
-                    role[id] = SWIPE
-                }
-                role[id] == SWIPE -> panelDrag?.drag(ev.getY(i) - buttonStartY[id])
+                // Swiping up from the strip puts the touchpad away.
+                role[id] == STRIP && ev.getY(i) - swipeStartY[id] < -swipeSlop -> role[id] = SWIPE
+                role[id] == SWIPE -> panelDrag?.drag(ev.getY(i) - swipeStartY[id])
                 role[id] == PAD -> {
                     val x = ev.getX(i)
                     val y = ev.getY(i)
@@ -349,19 +308,13 @@ class TouchpadView(context: Context) : View(context) {
                 return
             }
             r == SWIPE -> {
-                val dy = ev.getY(index) - buttonStartY[id]
-                val speed = dy / maxOf(1L, ev.eventTime - buttonDownAt[id])
+                val dy = ev.getY(index) - swipeStartY[id]
+                val speed = dy / maxOf(1L, ev.eventTime - swipeDownAt[id])
                 panelDrag?.release(dy, speed < -FLING_PX_PER_MS * density)
                 return
             }
             r >= BUTTON -> {
-                val b = buttons[r - BUTTON]
-                if (pendingSince[id] != 0L) {
-                    // Lifted before the hold timer: a click.
-                    pendingSince[id] = 0
-                    press(b)
-                }
-                release(b)
+                release(buttons[r - BUTTON])
                 return
             }
             r != PAD -> return
@@ -439,7 +392,7 @@ class TouchpadView(context: Context) : View(context) {
             textPaint.color = Palette.FG_DIM
             canvas.drawText("move · tap to click · hold for menu · two fingers scroll", pad.centerX(), hintY, textPaint)
             textPaint.textSize = 11 * density
-            canvas.drawText("swipe up on the bottom row to hide", pad.centerX(), hintY + 20 * density, textPaint)
+            canvas.drawText("swipe up from the bottom strip to hide", pad.centerX(), hintY + 20 * density, textPaint)
         } else {
             textPaint.color = Palette.WARN
             canvas.drawText("Update Omakey on your computer to use the touchpad:", pad.centerX(), hintY, textPaint)
@@ -451,6 +404,13 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     private fun drawSpeed(canvas: Canvas) {
+        fillPaint.color = Palette.SURFACE
+        canvas.drawRoundRect(strip, strip.height() / 2, strip.height() / 2, fillPaint)
+        // A grabber line, so the strip reads as something to swipe.
+        fillPaint.color = Palette.KEY
+        val gw = 36 * density
+        canvas.drawRoundRect(strip.centerX() - gw / 2, strip.top + 4 * density, strip.centerX() + gw / 2,
+            strip.top + 7 * density, 2 * density, 2 * density, fillPaint)
         val r = slider
         val h = r.height()
         val t = posOf(sensitivity)
@@ -489,12 +449,6 @@ class TouchpadView(context: Context) : View(context) {
         }
         canvas.drawRoundRect(r, radius, radius, fillPaint)
         val fg = if (held) Palette.BG else if (mouse) Palette.FG else Palette.FG_DIM
-        if (b.icon == Icon.NONE) {
-            textPaint.color = fg
-            textPaint.textSize = 15 * density
-            canvas.drawText(b.label, r.centerX(), r.centerY() - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
-            return
-        }
         // Mouse icon with the button it presses filled in, a modifier badge,
         // and the name underneath.
         val size = minOf(r.height() * 0.42f, r.width() * 0.5f)
@@ -538,20 +492,18 @@ class TouchpadView(context: Context) : View(context) {
         const val MAX_POINTERS = 32
         const val NONE = 0
         const val PAD = 1
-        const val SWIPE = 2 // a bottom-row finger swiping the touchpad away
+        const val SWIPE = 2 // a strip finger swiping the touchpad away
+        const val STRIP = 5 // a finger on the strip, not yet swiping
         const val SLIDER = 3
         const val CHIP = 4
         const val BUTTON = 10 // BUTTON + index into buttons
         const val TAP_MS = 220L
         const val MULTI_TAP_MS = 300L
         const val LONG_PRESS_MS = 450L
-        const val COMMIT_MS = 120L
         const val FLING_PX_PER_MS = 0.5f // per density unit
         const val MIN_SENS = 0.3f
         const val MAX_SENS = 3f
         const val KEY_LEFTCTRL = 29
         const val KEY_LEFTSHIFT = 42
-        const val KEY_RIGHTSHIFT = 54
-        const val KEY_RIGHTCTRL = 97
     }
 }

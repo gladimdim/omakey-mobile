@@ -116,15 +116,13 @@ handle or press Back to return):
 - one finger moves the pointer; a tap clicks; tap and hold right-clicks
 - two fingers scroll, content following the fingers; a two-finger tap
   right-clicks, a three-finger tap middle-clicks
-- the bottom row is Ctrl, Shift, Left, Middle, Right, Shift, Ctrl, held
-  while touched: hold Left and move with another finger to drag, or hold
-  Ctrl and scroll to zoom. Swipe up from the row to put the touchpad away
 - down each side, mirrored: Left click, Right click, Ctrl + Left and
   Shift + Left, held while touched (drag, Ctrl-click multi-select,
   Shift-click range select with the other thumb on the pad)
-- the speed slider at the bottom centre sets the pointer speed; the chip
-  above it picks a preset for your monitor (laptop, 1080p, 1440p, 3440×1440
-  ultrawide, 4K, 5120×1440…). Each computer keeps its own speed
+- a strip along the bottom holds the pointer speed: a slider, and a chip
+  that picks a preset for your monitor (laptop, 1080p, 1440p, 3440×1440
+  ultrawide, 4K, 5120×1440…). Each computer keeps its own speed. Swipe up
+  from the strip to put the touchpad away
 
 It needs omakeyd 0.3 or newer on the computer (the bar widget offers the
 update); with an older one the touchpad says so.
