@@ -223,6 +223,7 @@ class KeyboardLink(
                             srtt += (r.pingMs.coerceAtLeast(0) - srtt) / 8
                             resendMs = (srtt * 1.5f + 2).toLong().coerceIn(RESEND_MIN_MS, RESEND_MS)
                             r.leds?.let(listener::onLeds)
+                            r.theme?.let(listener::onTheme)
                             if (t - lastPingReport >= 250) {
                                 lastPingReport = t
                                 listener.onPing(r.pingMs)

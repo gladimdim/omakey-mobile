@@ -6,12 +6,13 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import com.gladimdim.omakey.layout.KeyStyle
 import com.gladimdim.omakey.layout.Layout
 import com.gladimdim.omakey.ui.Palette
+import kotlin.math.abs
 
 /**
  * Draws a layout and turns raw multi-touch into key presses. Keys fire on
@@ -46,7 +47,6 @@ class KeyboardView(context: Context) : View(context) {
 
     init {
         setBackgroundColor(Palette.BG)
-        isHapticFeedbackEnabled = true
     }
 
     /** Caps Lock as sent from here or reported by the computer; kept when the layout changes. */
@@ -54,6 +54,9 @@ class KeyboardView(context: Context) : View(context) {
 
     /** False for a preview: touches do nothing. */
     var interactive = true
+
+    /** Felt on every key press and release; null for none. */
+    var haptics: Haptics? = null
 
     /** Tap modifiers and Fn instead of holding them (see [KeyboardModel.sticky]). */
     var sticky = false
@@ -67,7 +70,11 @@ class KeyboardView(context: Context) : View(context) {
     private var fittedLabel: Array<String?> = emptyArray()
     private var fittedSize = FloatArray(0)
 
+    /** Where keys go; kept for the Backspace that takes back a swipe's first key. */
+    private var sink: KeyboardModel.Sink? = null
+
     fun setLayout(layout: Layout, sink: KeyboardModel.Sink) {
+        this.sink = sink
         model?.cancelAll()
         model = KeyboardModel(layout, sink, locks).also { it.sticky = sticky }
         rects = Array(layout.keys.size) { RectF() }
@@ -126,21 +133,100 @@ class KeyboardView(context: Context) : View(context) {
         }
     }
 
+    /** Pulling the touchpad down over the keyboard, from a swipe that started on a key. */
+    interface Pull {
+        fun begin(rawY: Float)
+        fun move(rawY: Float)
+        fun end(velocityY: Float)
+    }
+
+    /** Set to let a quick swipe down on a typing key pull the touchpad; null for none. */
+    var pull: Pull? = null
+
+    // The first finger, while it may still turn into a swipe.
+    private var swipeId = -1
+    private var swipeX = 0f
+    private var swipeY = 0f
+    private var swipeAt = 0L
+    private var pulling = false
+    private val velocity = VelocityTracker.obtain()
+
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         if (!interactive) return false
         val m = model ?: return false
+        if (pull != null) velocity.addMovement(ev)
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val i = ev.actionIndex
+                if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+                    swipeId = ev.getPointerId(i)
+                    swipeX = ev.getX(i)
+                    swipeY = ev.getY(i)
+                    swipeAt = ev.eventTime
+                    velocity.clear()
+                    velocity.addMovement(ev)
+                } else {
+                    // A second finger: typing, not a swipe.
+                    swipeId = -1
+                }
+                if (pulling) return true
                 val key = m.hitTestStretched((ev.getX(i) - originX) / unit, (ev.getY(i) - originY) / unit, stretch)
                 if (m.down(ev.getPointerId(i), key)) {
-                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    haptics?.key(down = true)
                     invalidate()
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP ->
-                if (m.up(ev.getPointerId(ev.actionIndex))) invalidate()
-            MotionEvent.ACTION_CANCEL -> if (m.cancelAll()) invalidate()
+            MotionEvent.ACTION_MOVE -> {
+                if (pulling) {
+                    pull?.move(ev.rawY)
+                    return true
+                }
+                val i = ev.findPointerIndex(swipeId)
+                if (pull != null && i >= 0) {
+                    val dy = ev.getY(i) - swipeY
+                    val quick = ev.eventTime - swipeAt < SWIPE_MS
+                    if (!quick) {
+                        swipeId = -1
+                    } else if (dy > unit * SWIPE_UNITS && dy > 2 * abs(ev.getX(i) - swipeX) &&
+                        m.typedOnly(swipeId) { it in UsKeys.PRINTABLE }
+                    ) {
+                        // A swipe down, not a key: take the character back and pull the touchpad.
+                        m.cancel(swipeId)
+                        sink?.let {
+                            it.keyDown(UsKeys.KEY_BACKSPACE)
+                            it.keyUp(UsKeys.KEY_BACKSPACE)
+                        }
+                        swipeId = -1
+                        pulling = true
+                        invalidate()
+                        pull?.begin(ev.rawY - dy)
+                        pull?.move(ev.rawY)
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                if (pulling) {
+                    if (ev.actionMasked == MotionEvent.ACTION_UP) {
+                        pulling = false
+                        velocity.computeCurrentVelocity(1000)
+                        pull?.end(velocity.yVelocity)
+                    }
+                    return true
+                }
+                if (ev.getPointerId(ev.actionIndex) == swipeId) swipeId = -1
+                if (m.up(ev.getPointerId(ev.actionIndex))) {
+                    haptics?.key(down = false)
+                    invalidate()
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                if (pulling) {
+                    pulling = false
+                    pull?.end(0f)
+                }
+                swipeId = -1
+                if (m.cancelAll()) invalidate()
+            }
         }
         return true
     }
@@ -228,6 +314,9 @@ class KeyboardView(context: Context) : View(context) {
 
     private companion object {
         const val KEY_CAPSLOCK = 58
+        /** A swipe down must cover this many key units within [SWIPE_MS]: quicker than a key repeats. */
+        const val SWIPE_UNITS = 0.55f
+        const val SWIPE_MS = 250L
     }
 
     private fun drawFitted(canvas: Canvas, index: Int, text: String, r: RectF, sizeUnits: Float) {

@@ -20,20 +20,22 @@ import com.gladimdim.omakey.layout.LayoutLink
 import com.gladimdim.omakey.layout.LayoutParser
 import com.gladimdim.omakey.net.Discovery
 import com.gladimdim.omakey.net.Found
+import com.gladimdim.omakey.net.Reachability
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.PairingException
 import com.gladimdim.omakey.protocol.PairingUri
-import com.gladimdim.omakey.store.BtHost
+import com.gladimdim.omakey.store.AppSettings
 import com.gladimdim.omakey.store.BtHostStore
 import com.gladimdim.omakey.store.HostStore
 import com.gladimdim.omakey.store.LayoutStore
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import java.net.InetSocketAddress
 
 /**
  * Connect screen: paired computers, computers nearby, pairing by QR code or
  * pasted link, computers that use the phone as a Bluetooth keyboard, and
- * the layout picker. Also handles `omakey://` links and
+ * the layouts page. Also handles `omakey://` links and
  * shared layout files.
  */
 class MainActivity : ComponentActivity() {
@@ -42,11 +44,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var layouts: LayoutStore
     private lateinit var discovery: Discovery
     private var nearby: List<Found> = emptyList()
+    private lateinit var reach: Reachability
+    /** Paired computers by host id: the address that answered, or null when none did. Absent: not checked yet. */
+    private var online: Map<String, InetSocketAddress?> = emptyMap()
 
     private lateinit var pairedList: LinearLayout
     private lateinit var nearbyList: LinearLayout
     private lateinit var btList: LinearLayout
     private lateinit var layoutButton: TextView
+    /** The theme the screen was built with; Settings may change it. */
+    private var builtTheme = ""
 
     private val scan = registerForActivityResult(ScanContract()) { result ->
         result.contents?.let { handleText(it) }
@@ -70,12 +77,21 @@ class MainActivity : ComponentActivity() {
         uri?.let { importLayoutFrom(it) }
     }
 
+    private val layoutsPage = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == LayoutsActivity.RESULT_IMPORT) {
+            openFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Palette.load(this)
+        builtTheme = Palette.theme.id
         hosts = HostStore(this)
         btHosts = BtHostStore(this)
         layouts = LayoutStore(this)
         discovery = Discovery(this) { nearby = it; render() }
+        reach = Reachability(phoneName()) { online = it; render() }
         buildUi()
         pendingOpen = savedInstanceState?.getString(STATE_PENDING)
         pendingNeedsBluetooth = savedInstanceState?.getBoolean(STATE_PENDING_BT) ?: false
@@ -95,12 +111,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (AppSettings(this).themeId != builtTheme) return recreate()
         render()
         discovery.start()
+        reach.start()
     }
 
     override fun onStop() {
         discovery.stop()
+        reach.stop()
         super.onStop()
     }
 
@@ -109,10 +128,20 @@ class MainActivity : ComponentActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24f), dp(32f), dp(24f), dp(32f))
         }
-        col.addView(text("Omakey", 34f, Palette.FG, bold = true))
+        col.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(text("Omakey", 34f, Palette.FG, bold = true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(text("⚙", 26f, Palette.ACCENT).apply {
+                setPadding(dp(12f), dp(4f), 0, dp(4f))
+                isClickable = true
+                contentDescription = "Settings"
+                setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+            })
+        })
         col.addView(text("Your phone is the keyboard.", 15f, Palette.FG_DIM).apply { setPadding(0, dp(4f), 0, 0) })
 
-        col.addView(section("PAIRED COMPUTERS"))
+        col.addView(section("SELECT COMPUTER TO USE"))
         pairedList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(pairedList)
 
@@ -147,9 +176,14 @@ class MainActivity : ComponentActivity() {
 
         setContentView(ScrollView(this).apply {
             setBackgroundColor(Palette.BG)
-            fitsSystemWindows = true
+            padForCutout()
             addView(col)
         })
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
     }
 
     private fun render() {
@@ -160,12 +194,20 @@ class MainActivity : ComponentActivity() {
         if (paired.isEmpty()) {
             pairedList.addView(text("No computers yet.", 14f, Palette.FG_DIM))
         }
+        reach.update(paired, nearby)
         for (h in paired) {
-            val seen = nearbyById[h.hostId]
-            val detail = if (seen != null) "● nearby · ${seen.address.address.hostAddress}" else h.addresses.first()
-            pairedList.addView(card(h.name, detail, if (seen != null) Palette.OK else Palette.FG_DIM).apply {
+            val answered = online[h.hostId]
+            val address = answered?.address?.hostAddress ?: nearbyById[h.hostId]?.address?.address?.hostAddress ?: h.addresses.first()
+            val detail = when {
+                answered != null -> "● Online · $address"
+                h.hostId !in online -> "Checking… · $address"
+                h.btAddress != null -> "○ Not on this Wi-Fi · will try Bluetooth"
+                else -> "○ Offline · $address"
+            }
+            val color = if (answered != null) Palette.OK else Palette.FG_DIM
+            pairedList.addView(card(h.name, detail, color, border = if (answered != null) Palette.OK else null).apply {
                 setOnClickListener { openKeyboard(h) }
-                setOnLongClickListener { confirmForget(h); true }
+                setOnLongClickListener { confirmUnlink(h, hosts, ::render); true }
             })
         }
 
@@ -185,11 +227,11 @@ class MainActivity : ComponentActivity() {
         for (b in btHosts.all()) {
             btList.addView(card(b.name, "Bluetooth keyboard").apply {
                 setOnClickListener { openWithBluetooth(KeyboardActivity.BT_PREFIX + b.address) }
-                setOnLongClickListener { confirmForget(b); true }
+                setOnLongClickListener { confirmUnlink(b, btHosts, ::render); true }
             })
         }
 
-        layoutButton.text = "⌨  ${layouts.selected().name}"
+        layoutButton.text = "⌨  ${LayoutsActivity.currentName(layouts)}"
     }
 
     private fun startScan() {
@@ -208,34 +250,15 @@ class MainActivity : ComponentActivity() {
         else handleText(text)
     }
 
+    /** The layouts page; [render] in onStart picks up a new selection. */
     private fun pickLayout() {
-        LayoutPicker.show(this, layouts, onImport = {
-            openFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
-        }) { render() }
-    }
-
-    private fun confirmForget(h: HostRecord) {
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Forget ${h.name}?")
-            .setMessage("This phone will need a new pairing code to connect again. Also remove it on the computer with `omakeyd forget`.")
-            .setPositiveButton("Forget") { _, _ -> hosts.remove(h.hostId); render() }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun confirmForget(b: BtHost) {
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle("Forget ${b.name}?")
-            .setMessage("It's removed from this list. To unpair completely, also remove it in the phone's Bluetooth settings.")
-            .setPositiveButton("Forget") { _, _ -> btHosts.remove(b.address); render() }
-            .setNegativeButton("Cancel", null)
-            .show()
+        layoutsPage.launch(Intent(this, LayoutsActivity::class.java).putExtra(LayoutsActivity.EXTRA_CAN_IMPORT, true))
     }
 
     private fun openKeyboard(h: HostRecord) = openKeyboard(h.hostId)
 
     private fun openKeyboard(target: String) {
-        startActivity(Intent(this, KeyboardActivity::class.java).putExtra(KeyboardActivity.EXTRA_TARGET, target))
+        startActivity(KeyboardActivity.intent(this, target, layouts))
     }
 
     private fun bluetoothGranted(): Boolean =
@@ -325,7 +348,7 @@ class MainActivity : ComponentActivity() {
                 append("\n\nThis link came from another app or a web page.")
             }
         }
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+        AlertDialog.Builder(this, Palette.dialogTheme)
             .setTitle(if (replaces) "Replace pairing?" else "Pair with ${host.name}?")
             .setMessage(message)
             .setPositiveButton(if (replaces) "Replace" else "Pair") { _, _ -> pair(host) }

@@ -148,6 +148,26 @@ class KeyboardModel(val layout: Layout, private val sink: Sink, private val lock
         return keys[index].layer == null && c in 0 until LATCH_CODES && latch[c] == LOCKED
     }
 
+    /**
+     * Whether [pointerId]'s key, on its own, only typed a character: [typing]
+     * says so of its code, no other finger is down, and no modifier is
+     * latched or layer on. Then one Backspace undoes it, and the touch can
+     * turn into a swipe.
+     */
+    fun typedOnly(pointerId: Int, typing: (Int) -> Boolean): Boolean {
+        if (pointerId !in 0 until MAX_POINTERS || pointerKey[pointerId] < 0) return false
+        if (layerDepth > 0 || oneShotLayer != null || latch.any { it != 0 }) return false
+        if ((0 until MAX_POINTERS).any { it != pointerId && pointerKey[it] >= 0 }) return false
+        return typing(pointerCode[pointerId])
+    }
+
+    /** Lift [pointerId]'s key without it counting as a tap: a swipe took the finger. */
+    fun cancel(pointerId: Int): Boolean {
+        if (pointerId !in 0 until MAX_POINTERS) return false
+        chorded[pointerId] = true
+        return up(pointerId)
+    }
+
     /** Returns true when the view should redraw. */
     fun down(pointerId: Int, keyIndex: Int): Boolean {
         if (pointerId !in 0 until MAX_POINTERS || keyIndex < 0) return false

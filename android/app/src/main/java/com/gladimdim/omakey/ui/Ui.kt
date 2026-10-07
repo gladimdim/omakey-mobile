@@ -1,15 +1,66 @@
 package com.gladimdim.omakey.ui
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.widget.LinearLayout
 import android.widget.TextView
 
 /** Small helpers for the code-built screens. */
+
+/** The phone's name as the user set it, for omakeyd and Bluetooth pairing. */
+internal fun Context.phoneName(): String =
+    Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() }
+        ?: "${Build.MANUFACTURER} ${Build.MODEL}"
+
+/**
+ * Every screen is fullscreen: status and navigation bars hidden, back for a
+ * moment with a swipe from the edge. Call it again whenever the window gets
+ * focus: a dialog or another app brings the bars back.
+ */
+internal fun Activity.hideSystemBars() {
+    if (Build.VERSION.SDK_INT >= 30) {
+        window.setDecorFitsSystemWindows(false)
+        window.insetsController?.apply {
+            hide(WindowInsets.Type.systemBars())
+            systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    } else {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+    }
+}
+
+/**
+ * Pads a fullscreen screen's root clear of the camera cutout (and of any
+ * bar that stays visible). Swiped-in bars float over the content instead.
+ */
+internal fun View.padForCutout() {
+    setOnApplyWindowInsetsListener { v, insets ->
+        if (Build.VERSION.SDK_INT >= 30) {
+            val i = insets.getInsets(WindowInsets.Type.displayCutout() or WindowInsets.Type.systemBars())
+            v.setPadding(i.left, i.top, i.right, i.bottom)
+        } else {
+            val c = insets.displayCutout
+            @Suppress("DEPRECATION")
+            v.setPadding(
+                maxOf(c?.safeInsetLeft ?: 0, insets.systemWindowInsetLeft), maxOf(c?.safeInsetTop ?: 0, insets.systemWindowInsetTop),
+                maxOf(c?.safeInsetRight ?: 0, insets.systemWindowInsetRight), maxOf(c?.safeInsetBottom ?: 0, insets.systemWindowInsetBottom),
+            )
+        }
+        insets
+    }
+}
 internal fun Context.dp(v: Float): Int =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics).toInt()
 
@@ -35,11 +86,12 @@ internal fun Context.section(s: String) = text(s, 12f, Palette.FG_DIM, bold = tr
     setPadding(0, dp(28f), 0, dp(10f))
 }
 
-/** A tappable card with a title and a detail line. */
-internal fun Context.card(title: String, detail: String, detailColor: Int = Palette.FG_DIM) =
+/** A tappable card with a title and a detail line; [border] outlines it in that colour. */
+internal fun Context.card(title: String, detail: String, detailColor: Int = Palette.FG_DIM, border: Int? = null) =
     LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(Palette.SURFACE, dp(10f).toFloat())
+        background = if (border != null) rounded(Palette.SURFACE, dp(10f).toFloat(), border, dp(1.5f))
+        else rounded(Palette.SURFACE, dp(10f).toFloat())
         setPadding(dp(16f), dp(14f), dp(16f), dp(14f))
         isClickable = true
         isFocusable = true

@@ -100,7 +100,7 @@ scripts/sync-spec.sh            # defaults to ../omakey-layout-studio
    link that would replace an existing pairing with a different key gets a
    loud warning: a pairing link from a web page could otherwise redirect
    your typing.
-3. Next time, tap the computer in **Paired computers**. If its IP changed, the
+3. Next time, tap the computer under **Select computer to use**. If its IP changed, the
    app finds it again over mDNS by its host id.
 
 Long-press a paired computer to forget it. **Layout** picks the active layout,

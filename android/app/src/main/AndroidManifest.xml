@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- WifiLock (WIFI_MODE_FULL_LOW_LATENCY) needs it. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Trackpad-style haptics on the touchpad and keys. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Bluetooth keyboard mode and the Bluetooth link to omakeyd. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -31,7 +33,8 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Omakey.Fullscreen">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -63,6 +66,33 @@
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:theme="@style/Theme.Omakey.Fullscreen"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
+
+        <activity
+            android:name=".ui.LayoutsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Omakey.Fullscreen" />
+
+        <!-- Portrait mode: the phone's own keyboard below the touchpad. -->
+        <activity
+            android:name=".ui.PortraitKeyboardActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"
+            android:theme="@style/Theme.Omakey.Fullscreen"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
+
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Omakey.Fullscreen" />
+
+        <activity
+            android:name=".ui.LandscapeLayoutsActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.Omakey.Fullscreen"
             tools:ignore="DiscouragedApi,LockedOrientationActivity" />
 

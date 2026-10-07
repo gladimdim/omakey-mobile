@@ -8,6 +8,7 @@ import com.gladimdim.omakey.layout.Keycodes
 import com.gladimdim.omakey.layout.Layout
 import com.gladimdim.omakey.layout.LayoutException
 import com.gladimdim.omakey.layout.LayoutParser
+import com.gladimdim.omakey.protocol.DesktopTheme
 import com.gladimdim.omakey.protocol.Hex
 import com.gladimdim.omakey.protocol.HostRecord
 import org.json.JSONArray
@@ -153,6 +154,49 @@ private object KeyWrap {
     }
 }
 
+/** The Settings page: theme and haptics. */
+class AppSettings(context: Context) {
+    private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    var themeId: String
+        get() = prefs.getString("theme", null) ?: DEFAULT_THEME
+        set(value) = prefs.edit().putString("theme", value).apply()
+
+    /** The Omarchy theme of the computer typed on last, for the "From computer" theme. */
+    var desktopTheme: DesktopTheme?
+        get() = prefs.getString("desktopTheme", null)?.let { raw ->
+            try {
+                val o = JSONObject(raw)
+                val c = o.getJSONArray("colors")
+                DesktopTheme(o.getString("name"), o.getBoolean("light"), IntArray(c.length()) { c.getInt(it) })
+            } catch (e: Exception) {
+                null
+            }
+        }
+        set(value) = prefs.edit().putString("desktopTheme", value?.let {
+            JSONObject().put("name", it.name).put("light", it.light).put("colors", JSONArray(it.colors.toList())).toString()
+        }).apply()
+
+    /** The computer [desktopTheme] came from. */
+    var desktopThemeFrom: String?
+        get() = prefs.getString("desktopThemeFrom", null)
+        set(value) = prefs.edit().putString("desktopThemeFrom", value).apply()
+
+    /** The strip of typed text above the keyboard. On unless turned off. */
+    var typedText: Boolean
+        get() = prefs.getBoolean("typedText", true)
+        set(value) = prefs.edit().putBoolean("typedText", value).apply()
+
+    /** Trackpad-style haptics on the touchpad and keys. On unless turned off. */
+    var haptics: Boolean
+        get() = prefs.getBoolean("haptics", true)
+        set(value) = prefs.edit().putBoolean("haptics", value).apply()
+
+    companion object {
+        const val DEFAULT_THEME = "tokyo-night"
+    }
+}
+
 /** A computer the phone has been a Bluetooth keyboard for. */
 data class BtHost(val address: String, val name: String)
 
@@ -192,11 +236,12 @@ class LayoutStore(private val context: Context) {
     /**
      * Built-in layouts are parsed once per process, imported ones again only
      * when their file changes: the connect screen asks on every redraw.
+     * The default layout comes first, the other built-in ones by file name.
      */
     fun all(): List<Entry> {
         val builtIn = builtInCache ?: (context.assets.list("layouts") ?: emptyArray()).sorted().mapNotNull { f ->
             parseOrNull(context.assets.open("layouts/$f").bufferedReader().use { it.readText() })?.let { Entry(it, true) }
-        }.also { builtInCache = it }
+        }.sortedBy { it.layout.id != DEFAULT_ID }.also { builtInCache = it }
         val ids = builtIn.map { it.layout.id }.toSet()
         val imported = (dir.listFiles() ?: emptyArray()).sortedBy { it.name }.mapNotNull { f ->
             val stamp = f.lastModified() to f.length()
@@ -217,6 +262,19 @@ class LayoutStore(private val context: Context) {
         get() = (prefs.getString("selected", DEFAULT_ID) ?: DEFAULT_ID).let { RENAMED[it] ?: it }
         set(value) = prefs.edit().putString("selected", value).apply()
 
+    init {
+        // Pin the layout once. An update from a version whose default was
+        // Classic QWERTY keeps it for anyone who never picked one.
+        if (!prefs.contains("selected")) {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            selectedId = if (info.firstInstallTime != info.lastUpdateTime) OLD_DEFAULT_ID else DEFAULT_ID
+        }
+    }
+
+    /** The portrait mode is chosen instead of a layout. */
+    val portrait: Boolean get() = selectedId == PORTRAIT_ID
+
+    /** The chosen layout; in portrait mode the default one, which then only backs the (unseen) key view. */
     fun selected(): Layout = all().let { list ->
         (list.firstOrNull { it.layout.id == selectedId }
             ?: list.firstOrNull { it.layout.id == DEFAULT_ID }
@@ -250,7 +308,12 @@ class LayoutStore(private val context: Context) {
         @Volatile private var builtInCache: List<Entry>? = null
         private val importedCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Pair<Long, Long>, Layout?>>()
 
-        const val DEFAULT_ID = "classic-qwerty"
+        /** The layout a new install starts on, first in the list and recommended there. */
+        const val DEFAULT_ID = "omakey-pro"
+        /** Not a layout: the phone's own keyboard under the touchpad, in portrait. */
+        const val PORTRAIT_ID = "portrait"
+        /** The default up to 1.0.0. */
+        private const val OLD_DEFAULT_ID = "classic-qwerty"
         /** Built-in layouts that were renamed, old id to new, so a selection survives the update. */
         private val RENAMED = mapOf("split-qwerty" to "omakey-pro")
     }

@@ -1,5 +1,7 @@
 package com.gladimdim.omakey.net
 
+import com.gladimdim.omakey.protocol.DesktopTheme
+
 /**
  * A live connection the keyboard types through: omakeyd over Wi-Fi or
  * Bluetooth, or the phone as a Bluetooth keyboard. The touch thread
@@ -25,6 +27,9 @@ interface Link {
 
         /** The computer's lock lights: [com.gladimdim.omakey.protocol.Ack.LED_CAPS] and friends. */
         fun onLeds(leds: Int) {}
+
+        /** The computer's Omarchy theme, when its omakeyd sends one. */
+        fun onTheme(theme: DesktopTheme) {}
     }
 
     fun start()

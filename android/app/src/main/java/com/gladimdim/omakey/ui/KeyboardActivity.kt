@@ -12,19 +12,30 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.StrictMode
-import android.provider.Settings
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.view.animation.DecelerateInterpolator
+import android.view.animation.PathInterpolator
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
+import android.graphics.Outline
+import android.view.VelocityTracker
+import android.view.ViewConfiguration
+import android.view.ViewOutlineProvider
+import kotlin.math.abs
 import android.widget.FrameLayout
 import android.view.WindowInsets
-import android.view.WindowInsetsController
+import android.view.inputmethod.InputMethodManager
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.gladimdim.omakey.keyboard.KeyboardModel
+import com.gladimdim.omakey.keyboard.Haptics
+import com.gladimdim.omakey.keyboard.KeyLayouts
 import com.gladimdim.omakey.keyboard.KeyboardView
+import com.gladimdim.omakey.keyboard.UsKeys
 import com.gladimdim.omakey.keyboard.TouchpadView
 import android.widget.Toast
 import com.gladimdim.omakey.net.BluetoothHidLink
@@ -33,9 +44,11 @@ import com.gladimdim.omakey.net.FallbackLink
 import com.gladimdim.omakey.net.Found
 import com.gladimdim.omakey.net.Link
 import com.gladimdim.omakey.protocol.Ack
+import com.gladimdim.omakey.protocol.DesktopTheme
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
 import com.gladimdim.omakey.protocol.Wire
+import com.gladimdim.omakey.store.AppSettings
 import com.gladimdim.omakey.store.BtHost
 import com.gladimdim.omakey.store.BtHostStore
 import com.gladimdim.omakey.store.HostStore
@@ -48,7 +61,14 @@ import com.gladimdim.omakey.store.LayoutStore
  * plain Bluetooth keyboard. The computer can be switched from here without
  * leaving the keyboard.
  */
-class KeyboardActivity : Activity() {
+open class KeyboardActivity : Activity() {
+    /**
+     * Portrait mode ([PortraitKeyboardActivity]): the phone's own keyboard
+     * at the bottom, typing into [ime], and the touchpad above it. No
+     * layout and no sliding panel.
+     */
+    protected open val portrait = false
+
     /** What the keyboard types into. */
     private sealed interface Target {
         /** Saved and passed around as [EXTRA_TARGET]; also keys the touchpad settings. */
@@ -71,6 +91,13 @@ class KeyboardActivity : Activity() {
     private lateinit var btHosts: BtHostStore
     private lateinit var layouts: LayoutStore
     private lateinit var keyboard: KeyboardView
+    /** The typed text strip; null when turned off in Settings. */
+    private var typed: TypedTicker? = null
+    /** Portrait mode: what the phone's keyboard types into, and its paced sender. */
+    private var ime: ImeCapture? = null
+    private var typist: Typist? = null
+    /** Portrait mode: digits, F-keys, navigation and system keys above the phone's keyboard. */
+    private var keyStrip: KeyStrip? = null
     private lateinit var status: TextView
     private lateinit var stage: FrameLayout
     private lateinit var panel: FrameLayout
@@ -112,16 +139,27 @@ class KeyboardActivity : Activity() {
     private val sink = object : KeyboardModel.Sink {
         override fun keyDown(code: Int) {
             if (keys.press(code)) link?.send()
+            typed?.keyDown(code)
         }
 
         override fun keyUp(code: Int) {
             if (keys.release(code)) link?.send()
+            typed?.keyUp(code)
+            // A key went out: Ctrl or Shift latched on the touchpad, Super or Alt on the key strip, were for it.
+            if (code !in UsKeys.MODIFIERS) {
+                touchpad.modifiersUsed()
+                keyStrip?.modifiersUsed()
+            }
         }
     }
 
     private val padSink = object : TouchpadView.Sink {
         override fun button(code: Int, down: Boolean) {
             if (if (down) keys.press(code) else keys.release(code)) link?.send()
+            // Ctrl and Shift from the touchpad show in the typed text's shortcuts.
+            if (code in UsKeys.MODIFIERS) if (down) typed?.keyDown(code) else typed?.keyUp(code)
+            // A click let go: Super or Alt latched on the key strip was for it (Super + drag moves a window).
+            if (!down && code in Wire.BTN_LEFT..Wire.BTN_MIDDLE) keyStrip?.modifiersUsed()
         }
 
         override fun motion(dx: Float, dy: Float) {
@@ -137,6 +175,7 @@ class KeyboardActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Palette.load(this)
         hosts = HostStore(this)
         btHosts = BtHostStore(this)
         layouts = LayoutStore(this)
@@ -160,36 +199,74 @@ class KeyboardActivity : Activity() {
         status = text("", 12f, Palette.FG_DIM, bold = true).apply {
             background = rounded(Palette.SURFACE, dp(12f).toFloat())
             setPadding(dp(12f), dp(4f), dp(12f), dp(4f))
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
             isClickable = true
             setOnClickListener { pickHost() }
+        }
+
+        // The pull-down handle, first in the top bar.
+        handleLabel = text("⌄  touchpad", 12f, Palette.ACCENT, bold = true)
+        val handle = FrameLayout(this).apply {
+            background = rounded(Palette.SURFACE, dp(12f).toFloat(), Palette.ACCENT, dp(1f))
+            addView(handleLabel, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            // Tapped here; dragged anywhere on the top bar (see [top]).
+            setOnClickListener { setPad(!padOpen) }
+            contentDescription = "Touchpad: tap, or swipe the top bar down"
         }
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8f), dp(4f), dp(8f), 0)
-            addView(status)
-            addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
-            addView(barButton("") { toggleSticky() }.also { stickyButton = it })
+            if (portrait) {
+                // Narrow: the status takes the room between the buttons.
+                addView(barButton("⌨") { ime?.show() }.apply { contentDescription = "Show the keyboard" })
+                addView(FrameLayout(context).apply {
+                    addView(status, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            } else {
+                addView(handle, LinearLayout.LayoutParams(dp(136f), dp(26f)))
+                addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+            }
+            // Sticky keys are for the app's own keys.
+            addView(barButton("") { toggleSticky() }.also {
+                stickyButton = it
+                if (portrait) it.visibility = View.GONE
+            })
             addView(barButton("⇄ PC") { pickHost() })
             addView(barButton("⌨ Layout") { pickLayout() })
             addView(barButton("✕") { finish() })
         }
-        keyboard = KeyboardView(this)
+        val haptics = Haptics(this).apply { enabled = AppSettings(this@KeyboardActivity).haptics }
+        keyboard = KeyboardView(this).apply {
+            this.haptics = haptics
+            // A quick swipe down on a key pulls the touchpad over the keyboard, as the top bar does.
+            if (!portrait) pull = object : KeyboardView.Pull {
+                override fun begin(rawY: Float) = dragBegin(rawY)
+                override fun move(rawY: Float) = dragMove(rawY)
+                override fun end(velocityY: Float) = dragEnd(velocityY)
+            }
+        }
 
         // The touchpad lives above the keyboard and slides down over it.
         touchpad = TouchpadView(this).apply {
+            this.haptics = haptics
             sink = padSink
             onSensitivityChanged = { v ->
                 padPrefs.edit().putFloat("sens:${target.id}", v).putString("preset:${target.id}", CUSTOM).apply()
                 presetName = CUSTOM
             }
             onPresetsRequested = ::pickPreset
+            compact = portrait
             // Swiping up from the bottom row drags the touchpad back up.
-            panelDrag = object : TouchpadView.PanelDrag {
+            if (!portrait) panelDrag = object : TouchpadView.PanelDrag {
                 override fun drag(dy: Float) {
                     panelMoving = true
-                    panel.animate().cancel()
-                    panel.translationY = dy.coerceIn(-stage.height.toFloat(), 0f)
+                    padAnim?.cancel()
+                    fast(true)
+                    setPanelY(dy.coerceIn(-stage.height.toFloat(), 0f))
                 }
 
                 override fun release(dy: Float, flungUp: Boolean) {
@@ -200,9 +277,41 @@ class KeyboardActivity : Activity() {
         panel = FrameLayout(this).apply {
             setBackgroundColor(Palette.BG)
             visibility = View.INVISIBLE
-            addView(touchpad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            // A sheet over the keyboard: a shadow, and rounded bottom corners while it moves.
+            elevation = dp(20f).toFloat()
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(v: View, o: Outline) {
+                    o.setRoundRect(0, -panelRadius.toInt() - 1, v.width, v.height, panelRadius)
+                }
+            }
+            clipToOutline = true
+            if (!portrait) addView(touchpad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
-        stage = FrameLayout(this).apply {
+        if (portrait) {
+            val gate = object : LayoutGate {
+                override fun current() = keys.layout
+                // A Bluetooth keyboard can't change the computer's layout: nothing to wait for.
+                override fun canSwitch() = link is BluetoothHidLink || keys.unacked == 0
+                override fun switch(layout: String) {
+                    keys.layout = layout
+                }
+            }
+            val imm = getSystemService(InputMethodManager::class.java)
+            val t = Typist(
+                sink, gate,
+                preferred = { KeyLayouts.preferred(imm.currentInputMethodSubtype?.languageTag?.ifEmpty { null }
+                    ?: @Suppress("DEPRECATION") imm.currentInputMethodSubtype?.locale) },
+                onChar = { c -> typed?.nextChar = c },
+                // Hold back while omakeyd hasn't acknowledged most of what it can keep.
+                busy = { link !is BluetoothHidLink && keys.unacked > Wire.MAX_EVENTS - 8 },
+            )
+            typist = t
+            ime = ImeCapture(this, t) { keys.held().any { it in SHORTCUT_MODIFIERS } }
+            stage = FrameLayout(this).apply {
+                addView(ime, FrameLayout.LayoutParams(1, 1))
+                addView(touchpad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            }
+        } else stage = FrameLayout(this).apply {
             addView(keyboard, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             addView(panel, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             // Keep a closed panel parked just above the stage when its size
@@ -210,29 +319,148 @@ class KeyboardActivity : Activity() {
             // those) or while it is being dragged or animated.
             addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
                 if (!padOpen && !panelMoving && bottom - top != oldBottom - oldTop) {
-                    panel.translationY = -(bottom - top).toFloat()
+                    setPanelY(-(bottom - top).toFloat())
                 }
             }
         }
 
-        // The pull-down handle, centred in the top bar.
-        handleLabel = text("⌄  touchpad", 12f, Palette.ACCENT, bold = true)
-        val handle = FrameLayout(this).apply {
-            background = rounded(Palette.SURFACE, dp(12f).toFloat(), Palette.ACCENT, dp(1f))
-            addView(handleLabel, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-            setOnTouchListener(::onHandleTouch)
-            contentDescription = "Touchpad: tap or pull down"
-        }
+        // The connection status, centred in the top bar: as wide as the
+        // space between the handle and the buttons, ellipsized past that.
         val top = FrameLayout(this).apply {
             addView(bar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-            addView(handle, FrameLayout.LayoutParams(dp(136f), dp(26f), Gravity.CENTER).apply { topMargin = dp(2f) })
+            if (!portrait) addView(status, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply { topMargin = dp(4f) })
+        }
+        if (!portrait) bar.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
+            val width = right - left
+            val side = maxOf(handle.right, width - stickyButton.left) + dp(8f)
+            val max = (width - side * 2).coerceAtLeast(dp(80f))
+            // Only on a change: setting it lays the bar out again.
+            if (status.maxWidth != max) status.maxWidth = max
+        }
+        // The header: the top bar, a grip and the typed text. A vertical swipe
+        // anywhere on it pulls the touchpad down or throws it back up; the
+        // bar's buttons still take taps.
+        val header = object : LinearLayout(this) {
+            private val slop = ViewConfiguration.get(context).scaledTouchSlop
+            private var x0 = 0f
+            private var y0 = 0f
+            private var dragging = false
+            private val tracker = VelocityTracker.obtain()
+
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+                if (portrait) return false
+                return watch(ev)
+            }
+
+            override fun onTouchEvent(ev: MotionEvent): Boolean {
+                if (portrait) return false
+                watch(ev)
+                return true
+            }
+
+            /** True once the touch is a vertical drag: from then on it moves the panel. */
+            private fun watch(ev: MotionEvent): Boolean {
+                tracker.addMovement(ev)
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        x0 = ev.rawX
+                        y0 = ev.rawY
+                        dragging = false
+                        tracker.clear()
+                        tracker.addMovement(ev)
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dy = ev.rawY - y0
+                        if (!dragging && abs(dy) > slop && abs(dy) > abs(ev.rawX - x0)) {
+                            dragging = true
+                            dragBegin(y0)
+                        }
+                        if (dragging) dragMove(ev.rawY)
+                    }
+                    MotionEvent.ACTION_UP -> if (dragging) {
+                        tracker.computeCurrentVelocity(1000)
+                        dragEnd(tracker.yVelocity)
+                        dragging = false
+                    }
+                    MotionEvent.ACTION_CANCEL -> if (dragging) {
+                        dragEnd(0f)
+                        dragging = false
+                    }
+                }
+                return dragging
+            }
+        }.apply {
+            orientation = LinearLayout.VERTICAL
+            addView(top, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(32f)))
+            if (!portrait) addView(PullGrip(this@KeyboardActivity), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(10f)))
+            if (AppSettings(this@KeyboardActivity).typedText) {
+                typed = TypedTicker(this@KeyboardActivity).also {
+                    addView(it, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(22f)))
+                }
+            }
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Palette.BG)
-            addView(top, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(32f)))
+            addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(stage, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            // Portrait: clear of the camera cutout on top and of the phone's keyboard below.
+            // Landscape: the grab bar under the touchpad stays above the system's home gesture zone.
+            if (!portrait && Build.VERSION.SDK_INT >= 29) setOnApplyWindowInsetsListener { _, insets ->
+                @Suppress("DEPRECATION")
+                touchpad.bottomInset = insets.mandatorySystemGestureInsets.bottom.toFloat()
+                insets
+            }
+            if (portrait) {
+                // The phone's keyboard hidden: a button in its place, so the touchpad keeps its size.
+                val reopen = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    background = rounded(Palette.SURFACE, dp(16f).toFloat(), Palette.ACCENT, dp(1.5f))
+                    isClickable = true
+                    contentDescription = "Open the keyboard"
+                    addView(text("⌨", 40f, Palette.ACCENT).apply { gravity = Gravity.CENTER })
+                    addView(text("Tap to open the keyboard", 14f, Palette.FG, bold = true).apply {
+                        gravity = Gravity.CENTER
+                        setPadding(0, dp(6f), 0, 0)
+                    })
+                    setOnClickListener { ime?.show() }
+                }
+                val reopenArea = FrameLayout(context).apply {
+                    setPadding(dp(12f), dp(8f), dp(12f), dp(12f))
+                    addView(reopen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+                }
+                keyStrip = KeyStrip(this@KeyboardActivity, typist!!, sink).also { strip ->
+                    strip.haptics = haptics
+                    strip.page = prefs.getInt("stripPage", 0)
+                    strip.onPageChanged = { prefs.edit().putInt("stripPage", it).apply() }
+                    addView(strip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52f)))
+                }
+                var keyboardHeight = (resources.displayMetrics.heightPixels * 0.38f).toInt()
+                addView(reopenArea, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, keyboardHeight))
+                // Clear of the camera cutout on top and of the phone's keyboard below.
+                setOnApplyWindowInsetsListener { v, insets ->
+                    val top: Int
+                    val imeHeight: Int
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        top = insets.getInsets(WindowInsets.Type.displayCutout()).top
+                        imeHeight = insets.getInsets(WindowInsets.Type.ime()).bottom
+                    } else {
+                        top = insets.displayCutout?.safeInsetTop ?: 0
+                        // Only the keyboard is that tall at the bottom.
+                        @Suppress("DEPRECATION")
+                        imeHeight = insets.systemWindowInsetBottom.takeIf { it > dp(120f) } ?: 0
+                    }
+                    if (imeHeight > 0) keyboardHeight = imeHeight
+                    v.setPadding(0, top, 0, imeHeight)
+                    reopenArea.visibility = if (imeHeight > 0) View.GONE else View.VISIBLE
+                    if (reopenArea.layoutParams.height != keyboardHeight) {
+                        reopenArea.layoutParams = reopenArea.layoutParams.apply { height = keyboardHeight }
+                    }
+                    insets
+                }
+            }
         }
         setContentView(root)
         applyPadSettings()
@@ -265,21 +493,9 @@ class KeyboardActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
-    }
-
-    private fun hideSystemBars() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.setDecorFitsSystemWindows(false)
-            window.insetsController?.apply {
-                hide(WindowInsets.Type.systemBars())
-                systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+        if (hasFocus) {
+            hideSystemBars()
+            ime?.show()
         }
     }
 
@@ -351,7 +567,20 @@ class KeyboardActivity : Activity() {
             }
 
             override fun onLeds(leds: Int) = runOnUiThread {
-                if (link === l) keyboard.setCapsLock(leds and Ack.LED_CAPS != 0)
+                if (link !== l) return@runOnUiThread
+                keyboard.setCapsLock(leds and Ack.LED_CAPS != 0)
+                typed?.capsLock = leds and Ack.LED_CAPS != 0
+            }
+
+            override fun onTheme(theme: DesktopTheme) = runOnUiThread {
+                if (link !== l) return@runOnUiThread
+                val settings = AppSettings(this@KeyboardActivity)
+                if (settings.desktopTheme == theme && settings.desktopThemeFrom == hostName) return@runOnUiThread
+                settings.desktopTheme = theme
+                settings.desktopThemeFrom = hostName
+                // Following the computer: take its new colours now. The link
+                // reconnects in a moment and the theme then matches.
+                if (settings.themeId == Palette.FROM_COMPUTER) recreate()
             }
         }
         l = when (t) {
@@ -440,6 +669,11 @@ class KeyboardActivity : Activity() {
         hostName = next.name
         // Another computer, its own Caps Lock: assume off until it says.
         keyboard.setCapsLock(false)
+        typed?.capsLock = false
+        typed?.clear()
+        // The other computer's cursor is somewhere else.
+        typist?.clear()
+        ime?.reset()
         linkState = Link.State.CONNECTING
         pingMs = -1
         // Most recently used first on the connect screen.
@@ -470,7 +704,7 @@ class KeyboardActivity : Activity() {
             (if (current) "● " else "   ") + h.name + "  ·  " + detail
         }.toTypedArray()
 
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+        AlertDialog.Builder(this, Palette.dialogTheme)
             .setTitle("Type on")
             .setItems(labels) { _, i -> switchTo(all[i]) }
             .setNeutralButton("Pair another…") { _, _ ->
@@ -483,6 +717,8 @@ class KeyboardActivity : Activity() {
     }
 
     override fun onPause() {
+        typist?.clear()
+        keyStrip?.reset()
         // Never leave a key held on the computer while we're not looking.
         keyboard.releaseAll()
         touchpad.releaseAll()
@@ -537,35 +773,65 @@ class KeyboardActivity : Activity() {
     // ---- touchpad panel ----
 
     private var dragStartY = 0f
-    private var dragStartOffset = 0f
-    private var dragMoved = false
+    /** How much of the panel showed when the drag began, px. */
+    private var dragStartShown = 0f
+    private var padAnim: ValueAnimator? = null
+    /** Rounding of the panel's bottom corners: full while it flies, none once it covers the keyboard. */
+    private var panelRadius = 0f
 
-    /** Tap toggles the touchpad; dragging pulls it down or pushes it back up. */
-    private fun onHandleTouch(v: View, ev: MotionEvent): Boolean {
+    private fun dragBegin(rawY: Float) {
         val h = stage.height.toFloat()
-        if (h <= 0f) return true
-        when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                dragStartY = ev.rawY
-                dragStartOffset = if (padOpen) h else 0f
-                dragMoved = false
-                panel.animate().cancel()
-                panel.visibility = View.VISIBLE
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val d = ev.rawY - dragStartY
-                if (kotlin.math.abs(d) > dp(4f)) dragMoved = true
-                if (dragMoved) panel.translationY = (dragStartOffset + d).coerceIn(0f, h) - h
-            }
-            MotionEvent.ACTION_UP -> {
-                val shown = panel.translationY + h
-                setPad(if (!dragMoved) !padOpen else if (padOpen) shown > h * 0.65f else shown > h * 0.35f)
-            }
-            // The system took the gesture: put the panel back where it was.
-            MotionEvent.ACTION_CANCEL -> setPad(padOpen)
+        if (h <= 0f) return
+        padAnim?.cancel()
+        fast(true)
+        panelMoving = true
+        panel.visibility = View.VISIBLE
+        dragStartY = rawY
+        dragStartShown = panel.translationY + h
+    }
+
+    private fun dragMove(rawY: Float) {
+        val h = stage.height.toFloat()
+        setPanelY((dragStartShown + rawY - dragStartY).coerceIn(0f, h) - h)
+    }
+
+    /** Let go: a flick decides, else whichever is nearer; the flick's speed carries on. */
+    private fun dragEnd(velocityY: Float) {
+        val h = stage.height.toFloat()
+        val shown = panel.translationY + h
+        val flick = FLICK_DP_PER_S * resources.displayMetrics.density
+        val open = when {
+            velocityY > flick -> true
+            velocityY < -flick -> false
+            else -> shown > h / 2
         }
-        if (ev.actionMasked == MotionEvent.ACTION_DOWN || ev.actionMasked == MotionEvent.ACTION_MOVE) panelMoving = true
-        return true
+        setPad(open, velocityY)
+    }
+
+    /**
+     * Moves the panel and gives the depth: as it covers the keyboard, the
+     * keyboard sinks back (smaller, dimmer) and the panel widens to full
+     * and loses its rounded corners, as a sheet landing over it.
+     */
+    private fun setPanelY(y: Float) {
+        panel.translationY = y
+        val h = stage.height.toFloat()
+        if (h <= 0f) return
+        val p = ((y + h) / h).coerceIn(0f, 1f)
+        keyboard.pivotY = keyboard.height * 0.6f
+        keyboard.scaleX = 1f - 0.07f * p
+        keyboard.scaleY = 1f - 0.07f * p
+        keyboard.alpha = 1f - 0.6f * p
+        panel.scaleX = 0.94f + 0.06f * p
+        panelRadius = dp(28f) * (1f - p)
+        panel.invalidateOutline()
+    }
+
+    /** The display's highest refresh rate while the panel moves (Android 15+). */
+    private fun fast(on: Boolean) {
+        if (Build.VERSION.SDK_INT >= 35) {
+            panel.requestedFrameRate = if (on) View.REQUESTED_FRAME_RATE_CATEGORY_HIGH else View.REQUESTED_FRAME_RATE_CATEGORY_DEFAULT
+        }
     }
 
     /** The panel is being dragged or animated: layout passes leave it alone. */
@@ -586,7 +852,7 @@ class KeyboardActivity : Activity() {
             val mark = if (p.name == touchpad.presetName) "● " else "   "
             "$mark${p.name}  ·  ${p.sensitivity}×\n     ${p.detail}"
         }.toTypedArray()
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+        AlertDialog.Builder(this, Palette.dialogTheme)
             .setTitle("Pointer speed for ${target.name}")
             .setItems(labels) { _, i ->
                 val p = presets[i]
@@ -597,7 +863,11 @@ class KeyboardActivity : Activity() {
             .show()
     }
 
-    private fun setPad(open: Boolean) {
+    /**
+     * Fly the panel over the keyboard ([open]) or away above it. [velocity]:
+     * the finger's speed when let go, px/s, so the motion carries on from it.
+     */
+    private fun setPad(open: Boolean, velocity: Float = 0f) {
         val h = stage.height.toFloat()
         if (open && !padOpen) keyboard.releaseAll()
         if (!open && padOpen) touchpad.releaseAll()
@@ -605,15 +875,32 @@ class KeyboardActivity : Activity() {
         handleLabel.text = if (open) "⌃  keyboard" else "⌄  touchpad"
         panel.visibility = View.VISIBLE
         panelMoving = true
-        panel.animate()
-            .translationY(if (open) 0f else -h)
-            .setDuration(240)
-            .setInterpolator(DecelerateInterpolator(2f))
-            .withEndAction {
-                panelMoving = false
-                if (!padOpen) panel.visibility = View.INVISIBLE
-            }
-            .start()
+        fast(true)
+        padAnim?.cancel()
+        val from = panel.translationY
+        val to = if (open) 0f else -h
+        val distance = abs(to - from)
+        padAnim = ValueAnimator.ofFloat(from, to).apply {
+            duration = if (abs(velocity) > 1f) (distance / abs(velocity) * 1000 * 2.2f).toLong().coerceIn(160, 360)
+            else (220 + 140 * distance / h.coerceAtLeast(1f)).toLong()
+            // Fast at first, easing to rest: picks up the flick's speed.
+            interpolator = PathInterpolator(0.05f, 0.7f, 0.1f, 1f)
+            addUpdateListener { setPanelY(it.animatedValue as Float) }
+            addListener(object : AnimatorListenerAdapter() {
+                private var cancelled = false
+                override fun onAnimationCancel(animation: Animator) {
+                    cancelled = true
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    if (cancelled) return
+                    panelMoving = false
+                    fast(false)
+                    if (!padOpen) panel.visibility = View.INVISIBLE
+                }
+            })
+            start()
+        }
     }
 
     @Deprecated("Back closes the touchpad first")
@@ -622,12 +909,24 @@ class KeyboardActivity : Activity() {
     }
 
     private fun pickLayout() {
-        LayoutPicker.show(this, layouts, onImport = null) {
-            keyboard.releaseAll()
-            keys.releaseAll()
-            link?.send()
-            keyboard.setLayout(layouts.selected(), sink)
+        val page = if (portrait) LayoutsActivity::class.java else LandscapeLayoutsActivity::class.java
+        @Suppress("DEPRECATION")
+        startActivityForResult(Intent(this, page), REQ_LAYOUT)
+    }
+
+    @Deprecated("Plain Activity: the layouts page answers here")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_LAYOUT || resultCode != RESULT_OK) return
+        if (layouts.portrait != portrait) {
+            // Into or out of portrait mode: the other screen, same computer.
+            startActivity(intent(this, target.id, layouts))
+            finish()
+            return
         }
+        // Keys were already let go in onPause.
+        keyboard.setLayout(layouts.selected(), sink)
     }
 
     private fun renderStatus() {
@@ -647,19 +946,61 @@ class KeyboardActivity : Activity() {
         status.setTextColor(color)
     }
 
-    private fun phoneName(): String =
-        Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() }
-            ?: "${Build.MANUFACTURER} ${Build.MODEL}"
-
     companion object {
+        /** Opens the keyboard for [target]: landscape with a layout, or portrait mode. */
+        fun intent(context: android.content.Context, target: String, layouts: LayoutStore): Intent =
+            Intent(context, if (layouts.portrait) PortraitKeyboardActivity::class.java else KeyboardActivity::class.java)
+                .putExtra(EXTRA_TARGET, target)
+
         /** An omakeyd host id, [BT_PREFIX] + a Bluetooth address, or [BT_NEW]. */
         const val EXTRA_TARGET = "target"
         const val BT_PREFIX = "bt:"
         const val BT_NEW = "bt:new"
         private const val REQ_BLUETOOTH = 1
         private const val REQ_BLUETOOTH_FALLBACK = 2
+        private const val REQ_LAYOUT = 3
         /** How long a Bluetooth keyboard stays connected after the screen goes off. */
         private const val PARK_MS = 20_000L
         private const val CUSTOM = "Custom"
+        /** A swipe of the top bar faster than this throws the touchpad that way. */
+        private const val FLICK_DP_PER_S = 400f
+        /** Ctrl, Alt and Super, left and right: held, a key makes a shortcut. */
+        private val SHORTCUT_MODIFIERS = setOf(29, 97, 56, 100, 125, 126)
     }
 }
+
+/** Portrait mode: the phone's own keyboard below, the touchpad above. Declared portrait in the manifest. */
+class PortraitKeyboardActivity : KeyboardActivity() {
+    override val portrait = true
+}
+
+/** Under the top bar: a handle with arrows pointing down, to show the bar pulls the touchpad down. */
+private class PullGrip(context: android.content.Context) : View(context) {
+    private val density = resources.displayMetrics.density
+    private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val stroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 1.6f * density
+        strokeCap = android.graphics.Paint.Cap.ROUND
+    }
+
+    init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val hw = 18 * density
+        fill.color = Palette.FG_DIM
+        canvas.drawRoundRect(cx - hw, cy - 1.5f * density, cx + hw, cy + 1.5f * density, 1.5f * density, 1.5f * density, fill)
+        // ⌄ either side of the handle.
+        stroke.color = Palette.FG_DIM
+        val a = 3.5f * density
+        for (x in listOf(cx - hw - 12 * density, cx + hw + 12 * density)) {
+            canvas.drawLine(x - a, cy - a / 2, x, cy + a / 2, stroke)
+            canvas.drawLine(x, cy + a / 2, x + a, cy - a / 2, stroke)
+        }
+    }
+}
+

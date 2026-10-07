@@ -224,6 +224,7 @@ class RfcommLink(
                     is ClientSession.Result.Acked -> {
                         lastHeard = t
                         r.leds?.let(listener::onLeds)
+                        r.theme?.let(listener::onTheme)
                         if (t - lastPingReport >= 250) {
                             lastPingReport = t
                             listener.onPing(r.pingMs)

@@ -25,6 +25,10 @@ class KeyState {
     private var wheel = 0f
     private var hwheel = 0f
 
+    /** Key events sent but not yet acknowledged; past [Wire.MAX_EVENTS] the oldest are dropped. */
+    val unacked: Int
+        @Synchronized get() = pending.size
+
     /** Bumped on every change, so the sender knows to transmit now. */
     @Volatile
     var version = 0L
@@ -97,9 +101,13 @@ class KeyState {
         version++
     }
 
+    /** The xkb layout the computer reads these keys with (INPUT `layout`); null leaves it alone. */
+    @Volatile
+    var layout: String? = null
+
     @Synchronized
     fun buildInput(clientTimeMs: Int): Input =
-        Input(clientTimeMs, 0, heldOrder.copyOf(heldCount), pending.toList(), takePointer())
+        Input(clientTimeMs, 0, heldOrder.copyOf(heldCount), pending.toList(), takePointer(), layout)
 
     /** Motion and scroll gathered since the last call, in whole counts; null when none. */
     @Synchronized

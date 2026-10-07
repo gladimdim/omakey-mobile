@@ -29,7 +29,7 @@ object LayoutPreview {
             layout.description?.let { append("\n$it") }
             if (replaces != null) append("\n\nReplaces your imported layout \"${replaces.name}\" (same id \"${layout.id}\").")
         }
-        AlertDialog.Builder(activity, android.R.style.Theme_Material_Dialog_Alert)
+        AlertDialog.Builder(activity, Palette.dialogTheme)
             .setTitle(layout.name)
             .setMessage(details)
             .setView(frame)

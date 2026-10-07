@@ -162,24 +162,34 @@ class Input(
     val held: IntArray,
     val events: List<KeyEvent>,
     val pointer: Pointer? = null,
+    /**
+     * The xkb layout ("us", "ua") the computer should read these keys with,
+     * after the pointer (sent as zeros when there's no motion); null leaves
+     * the computer's layout alone.
+     */
+    val layout: String? = null,
 ) {
     fun encode(): ByteArray {
         require(held.size <= 255 && events.size <= Wire.MAX_EVENTS)
-        val trailer = if (pointer != null) 1 + Wire.POINTER_LEN else 0
+        val name = layout?.toByteArray(Charsets.US_ASCII)?.take(MAX_LAYOUT)?.toByteArray()
+        val trailer = (if (pointer != null || name != null) 1 + Wire.POINTER_LEN else 0) + (if (name != null) 1 + name.size else 0)
         val buf = ByteBuffer.allocate(4 + 1 + 1 + held.size * 2 + 1 + events.size * 5 + trailer)
         buf.putInt(clientTimeMs).put(flags.toByte()).put(held.size.toByte())
         for (c in held) buf.putShort(c.toShort())
         buf.put(events.size.toByte())
         for (e in events) buf.putShort(e.eseq.toShort()).putShort(e.code.toShort()).put(e.value.toByte())
-        if (pointer != null) {
+        if (pointer != null || name != null) {
+            val p = pointer ?: Pointer(0, 0, 0, 0)
             buf.put(Wire.POINTER_LEN.toByte())
-            buf.putShort(pointer.dx.toShort()).putShort(pointer.dy.toShort())
-                .putShort(pointer.wheel.toShort()).putShort(pointer.hwheel.toShort())
+            buf.putShort(p.dx.toShort()).putShort(p.dy.toShort()).putShort(p.wheel.toShort()).putShort(p.hwheel.toShort())
         }
+        if (name != null) buf.put(name.size.toByte()).put(name)
         return buf.array()
     }
 
     companion object {
+        const val MAX_LAYOUT = 16
+
         fun decode(b: ByteArray): Input? = try {
             val buf = ByteBuffer.wrap(b)
             val t = buf.int
@@ -189,13 +199,22 @@ class Input(
                 KeyEvent(buf.short.toInt() and 0xFFFF, buf.short.toInt() and 0xFFFF, buf.get().toInt() and 0xFF)
             }
             var pointer: Pointer? = null
+            var layout: String? = null
             if (buf.hasRemaining()) {
                 val len = buf.get().toInt() and 0xFF
                 if (len >= Wire.POINTER_LEN) {
                     pointer = Pointer(buf.short.toInt(), buf.short.toInt(), buf.short.toInt(), buf.short.toInt())
+                    buf.position(buf.position() + len - Wire.POINTER_LEN)
+                } else {
+                    buf.position(buf.position() + len)
+                }
+                if (pointer == Pointer(0, 0, 0, 0)) pointer = null
+                if (buf.hasRemaining()) {
+                    val n = buf.get().toInt() and 0xFF
+                    layout = String(ByteArray(n).also { buf.get(it) }, Charsets.US_ASCII)
                 }
             }
-            Input(t, flags, held, events, pointer)
+            Input(t, flags, held, events, pointer, layout)
         } catch (e: RuntimeException) {
             null
         }
@@ -206,11 +225,57 @@ class Input(
  * [leds]: the computer's lock lights, bit 0 Num Lock, bit 1 Caps Lock,
  * bit 2 Scroll Lock; null from servers that don't send them.
  */
-class Ack(val clientTimeMs: Int, val lastEseq: Int, val leds: Int? = null) {
+/**
+ * The desktop's Omarchy theme from an ACK (PROTOCOL.md, ACK `theme`):
+ * [colors] as 0xRRGGBB in [KEYS] order.
+ */
+class DesktopTheme(val name: String, val light: Boolean, val colors: IntArray) {
+    override fun equals(other: Any?) =
+        other is DesktopTheme && other.name == name && other.light == light && other.colors.contentEquals(colors)
+
+    override fun hashCode() = name.hashCode() * 31 + colors.contentHashCode()
+
+    fun encode(): ByteArray {
+        val n = truncateUtf8(name, MAX_NAME)
+        val body = ByteBuffer.allocate(3 + n.size + colors.size * 3)
+            .put(if (light) 1 else 0).put(n.size.toByte()).put(n).put(colors.size.toByte())
+        for (c in colors) body.put((c shr 16).toByte()).put((c shr 8).toByte()).put(c.toByte())
+        return byteArrayOf(body.capacity().toByte()) + body.array()
+    }
+
+    companion object {
+        val KEYS = listOf(
+            "background", "lighter_background", "dark_background", "foreground", "muted", "accent", "selection",
+            "red", "yellow", "green", "cyan", "blue", "magenta", "orange",
+        )
+        private const val MAX_NAME = 32
+
+        /** From the bytes after `leds`; null when absent, short, or missing colours. */
+        fun decode(b: ByteBuffer): DesktopTheme? {
+            if (b.remaining() < 1) return null
+            val len = b.get().toInt() and 0xFF
+            if (b.remaining() < len || len < 3) return null
+            val body = ByteBuffer.wrap(ByteArray(len).also { b.get(it) })
+            val light = body.get().toInt() == 1
+            val n = body.get().toInt() and 0xFF
+            if (body.remaining() < n + 1) return null
+            val name = String(ByteArray(n).also { body.get(it) }, Charsets.UTF_8)
+            val count = body.get().toInt() and 0xFF
+            if (count < KEYS.size || body.remaining() < count * 3) return null
+            val colors = IntArray(KEYS.size) {
+                ((body.get().toInt() and 0xFF) shl 16) or ((body.get().toInt() and 0xFF) shl 8) or (body.get().toInt() and 0xFF)
+            }
+            return DesktopTheme(name, light, colors)
+        }
+    }
+}
+
+class Ack(val clientTimeMs: Int, val lastEseq: Int, val leds: Int? = null, val theme: DesktopTheme? = null) {
     fun encode(): ByteArray {
         val buf = ByteBuffer.allocate(if (leds != null) 7 else 6).putInt(clientTimeMs).putShort(lastEseq.toShort())
         if (leds != null) buf.put(leds.toByte())
-        return buf.array()
+        // The theme only follows leds.
+        return if (leds != null && theme != null) buf.array() + theme.encode() else buf.array()
     }
 
     companion object {
@@ -221,7 +286,10 @@ class Ack(val clientTimeMs: Int, val lastEseq: Int, val leds: Int? = null) {
         fun decode(b: ByteArray): Ack? =
             if (b.size < 6) null
             else ByteBuffer.wrap(b).let {
-                Ack(it.int, it.short.toInt() and 0xFFFF, if (it.hasRemaining()) it.get().toInt() and 0xFF else null)
+                val time = it.int
+                val eseq = it.short.toInt() and 0xFFFF
+                val leds = if (it.hasRemaining()) it.get().toInt() and 0xFF else null
+                Ack(time, eseq, leds, if (leds != null) DesktopTheme.decode(it) else null)
             }
     }
 }

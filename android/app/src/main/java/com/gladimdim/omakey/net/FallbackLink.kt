@@ -1,6 +1,7 @@
 package com.gladimdim.omakey.net
 
 import android.content.Context
+import com.gladimdim.omakey.protocol.DesktopTheme
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
 import java.net.InetSocketAddress
@@ -158,6 +159,10 @@ class FallbackLink(
 
         override fun onLeds(leds: Int) {
             if (current() === self()) listener.onLeds(leds)
+        }
+
+        override fun onTheme(theme: DesktopTheme) {
+            if (current() === self()) listener.onTheme(theme)
         }
     }
 

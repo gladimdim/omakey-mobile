@@ -22,8 +22,11 @@ class ClientSession(
             /** Where to reach the computer over Bluetooth, "AA:BB:…"; null without Bluetooth. */
             val btAddress: String? = null,
         ) : Result
-        /** [leds]: the computer's lock lights ([Ack.LED_CAPS], …), or null when it doesn't say. */
-        data class Acked(val pingMs: Int, val leds: Int? = null) : Result
+        /**
+         * [leds]: the computer's lock lights ([Ack.LED_CAPS], …), or null when it doesn't say.
+         * [theme]: the desktop's theme, in the first few ACKs and after it changes.
+         */
+        data class Acked(val pingMs: Int, val leds: Int? = null, val theme: DesktopTheme? = null) : Result
         data object Rejected : Result
     }
 
@@ -110,6 +113,6 @@ class ClientSession(
         val ack = Ack.decode(p.open(aead) ?: return null) ?: return null
         recvCounter = p.counter
         keys.ack(ack.lastEseq)
-        return Result.Acked(nowMs - ack.clientTimeMs, ack.leds)
+        return Result.Acked(nowMs - ack.clientTimeMs, ack.leds, ack.theme)
     }
 }

@@ -302,4 +302,36 @@ class ProtocolTest {
         // SHA-256 of 32 zero bytes starts 66687aad.
         assertEquals("6668-7AAD", h.fingerprint)
     }
+
+    @Test
+    fun ackCarriesTheDesktopTheme() {
+        // As omakeyd writes it: leds, theme_len, light, name, count, RGB × 14.
+        val colors = IntArray(14) { 0x101010 * it }
+        val body = byteArrayOf(1, 4) + "nord".toByteArray() + byteArrayOf(14) +
+            colors.flatMap { listOf((it shr 16).toByte(), (it shr 8).toByte(), it.toByte()) }.toByteArray()
+        val raw = Ack(5, 7, leds = 2).encode() + byteArrayOf(body.size.toByte()) + body
+        val ack = Ack.decode(raw)!!
+        assertEquals(2, ack.leds)
+        val t = ack.theme!!
+        assertEquals("nord", t.name)
+        assertTrue(t.light)
+        assertArrayEquals(colors, t.colors)
+        // And back.
+        assertArrayEquals(raw, Ack(5, 7, 2, t).encode())
+        // Old servers: no theme. A cut-off one is ignored, not misread.
+        assertNull(Ack.decode(Ack(5, 7, leds = 2).encode())!!.theme)
+        assertNull(Ack.decode(raw.copyOf(raw.size - 1))!!.theme)
+    }
+
+    @Test
+    fun inputCarriesTheLayoutAfterThePointer() {
+        val i = Input(9, 0, intArrayOf(30), emptyList(), layout = "ua")
+        val back = Input.decode(i.encode())!!
+        assertEquals("ua", back.layout)
+        // The pointer went as zeros to make room; no motion, so none read back.
+        assertNull(back.pointer)
+        assertEquals(1 + Wire.POINTER_LEN + 1 + 2, i.encode().size - Input(9, 0, intArrayOf(30), emptyList()).encode().size)
+        assertNull(Input.decode(Input(9, 0, intArrayOf(30), emptyList()).encode())!!.layout)
+    }
 }
+
