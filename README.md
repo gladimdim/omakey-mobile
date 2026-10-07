@@ -6,6 +6,9 @@ kernel-level virtual keyboard made by `omakeyd`, so Hyprland binds,
 `SUPER + SPACE`, F-keys, Esc and the lock screen all work as they do with a
 Bluetooth keyboard.
 
+**Download:** the signed APK is on the [releases page](https://github.com/gladimdim/omakey-mobile/releases/latest).
+It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey-omarchy-plugin/>.
+
 | Directory  | Status |
 |------------|--------|
 | `android/` | Working: pairing, discovery, Classic QWERTY, layout import |
@@ -73,6 +76,12 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Needs JDK 17+ and the Android SDK (`android/local.properties` with
 `sdk.dir=…`, not committed).
+
+Published APKs are built with `./gradlew assembleRelease` and signed with the
+gladimdim-main key (certificate SHA-256 `8B:E4:25:A4:31:79:FB:FB:08:C2:31:3F:4B:C3:0C:26:F7:55:CA:44:BC:C7:22:EE:96:31:A6:77:45:B7:2D:36`),
+so each release installs over the previous one. Check a download with
+`apksigner verify --print-certs omakey-*.apk`. Signing settings come from the
+gitignored `android/keystore.properties` (see `keystore.properties.example`).
 
 After the layout spec changes in the studio repo, refresh the bundled copies:
 
