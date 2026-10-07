@@ -86,22 +86,40 @@ scripts/sync-spec.sh            # defaults to ../omakey-layout-studio
    `omakeyd pair`.
 2. In the app, tap **Scan QR code** (or copy the `omakey://pair…` link and tap
    **Paste link**). The keyboard opens.
+   Before saving, the app shows the computer's name, addresses and a
+   fingerprint (`ABCD-1234`) that must match the one under the QR code. A
+   link that would replace an existing pairing with a different key gets a
+   loud warning: a pairing link from a web page could otherwise redirect
+   your typing.
 3. Next time, tap the computer in **Paired computers**. If its IP changed, the
    app finds it again over mDNS by its host id.
 
-Long-press a paired computer to forget it. **Layout** picks the active layout
-or imports a `.json` file; `omakey://layout?d=…` links and layouts shared from
-other apps are imported too.
+Long-press a paired computer to forget it. **Layout** picks the active layout,
+shares one (as an `omakey://layout` link, or the JSON when it's large) or
+imports a `.json` file; `omakey://layout?d=…` links, files opened from a file
+manager and layouts shared from other apps are imported too, after a preview
+that says when it would replace an imported layout with the same id.
+
+**⇧ Sticky** in the keyboard's top bar turns on sticky keys: tap Shift,
+Ctrl, Alt or Super and it stays down for the next key (tap twice to lock it,
+once more to let go); tap Fn and the next key uses the Fn layer. Held in a
+chord, they work as usual. The keyboard follows the computer's Caps Lock
+light where it reports one (omakeyd 0.4+, or Bluetooth keyboard mode).
 
 ### How it stays fast
 
 - Keys fire on touch-down (`ACTION_DOWN` / `ACTION_POINTER_DOWN`). Each
   pointer holds one key until it lifts, and the code a finger pressed is the
   code its lift releases, even if Fn was let go first.
-- The touch thread only updates `KeyState` and wakes the network thread's
-  `Selector`. That thread sends at once, resends every 20 ms until ACKed,
-  and heartbeats every 100 ms. Packets are marked DSCP EF so Wi-Fi WMM
-  queues them as voice traffic.
+- Over Wi-Fi the touch thread sends the packet itself (a non-blocking UDP
+  send), then wakes the network thread, which resends until ACKed (after
+  1.5 × the measured ping + 2 ms, 5–20 ms) and heartbeats every 100 ms.
+  Packets are marked DSCP EF so Wi-Fi WMM queues them as voice traffic.
+- Over Bluetooth a stream write can block, so the touch thread only wakes
+  the link's writer thread, which sends the newest state (a burst of
+  touchpad moves becomes one packet).
+- The touchpad asks for unbuffered touch dispatch, so moves aren't held
+  for the next frame and resampled.
 - While the keyboard is visible the app holds a
   `WIFI_MODE_FULL_LOW_LATENCY` Wi-Fi lock; otherwise power save can delay
   packets by 100 ms or more.
@@ -113,10 +131,11 @@ other apps are imported too.
 - **QR scanning: `zxing-android-embedded`.** It works on phones without
   Google Play services and needs no network model download; the Google code
   scanner would be smaller but ties pairing to Play services.
-- **Storage:** paired computers (including their 256-bit keys) are JSON in
-  app-private SharedPreferences. Backups and device transfer are disabled
-  so keys never leave the phone. A future step is wrapping them with an
-  Android Keystore key.
+- **Storage:** paired computers are JSON in app-private SharedPreferences;
+  each 256-bit pairing key is encrypted with an AES-256-GCM key that lives
+  in the Android Keystore and can't be exported. Pairings saved by older
+  versions are encrypted on first read. Backups and device transfer are
+  disabled, so keys never leave the phone.
 - **No Compose.** The keyboard must be a raw `View` for touch latency, and
   the two connect screens are small enough to build in code, keeping the
   APK and build lean.
@@ -127,7 +146,10 @@ Tap or pull down the **⌄ touchpad** handle at the top centre of the keyboard
 screen and a touchpad slides down over the keys (pull it back up, tap the
 handle or press Back to return):
 
-- one finger moves the pointer; a tap clicks; tap and hold right-clicks
+- one finger moves the pointer; a tap clicks; tap and hold right-clicks;
+  tap, then touch again and move to drag with the button held (two quick
+  taps double-click). A tap's click waits 150 ms for that second touch.
+  Lifting one finger of a two-finger scroll goes back to moving
 - two fingers scroll, content following the fingers; a two-finger tap
   right-clicks, a three-finger tap middle-clicks
 - down each side, mirrored: Left click, Right click, Ctrl + Left and
