@@ -356,13 +356,16 @@ class LayoutAndKeyboardTest {
     fun layerOverridesFollowTheLabelRule() {
         val l = LayoutParser.parse(minimal(
             """{"id":"k","x":0,"y":0,"w":1,"h":1,"label":"↑","code":"KEY_UP",
-               "layers":{"fn":{"code":"KEY_PAGEUP"},"nav":{"code":"KEY_HOME","label":"Hm"},"off":{}}}""",
+               "layers":{"fn":{"code":"KEY_PAGEUP"},"nav":{"code":"KEY_HOME","label":"Hm"},"off":{},"note":{"label":"x"}}}""",
         ), keycodes)
         val layers = l.keys[0].layers
         assertEquals("PgUp", layers["fn"]!!.label) // no label: keycodes.json's
         assertEquals("Hm", layers["nav"]!!.label)
         assertEquals("", layers["off"]!!.label) // no code: off and blank
         assertEquals(0, layers["off"]!!.code)
+        assertEquals("x", layers["note"]!!.label) // off, but labelled
+        assertEquals(0, layers["note"]!!.code)
+        assertNull(layers["fn"]!!.ownLabel) // the printed Fn legend needs its own label
     }
 
     @Test

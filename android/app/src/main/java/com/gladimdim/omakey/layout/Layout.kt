@@ -37,7 +37,13 @@ enum class KeyStyle { NORMAL, MOD, FKEY, ACCENT, SPACE }
  * (and shows no label); otherwise [label] is the override's own label or its
  * code's default one (LAYOUT.md, `layers`).
  */
-class LayerOverride(val code: Int, val codeName: String?, val label: String?)
+class LayerOverride(
+    val code: Int,
+    val codeName: String?,
+    val label: String,
+    /** The entry's own `label`, for the printed Fn legend; null when it relies on the default. */
+    val ownLabel: String? = label,
+)
 
 /** A rectangle in layout units. */
 class KeyRect(val x: Float, val y: Float, val w: Float, val h: Float) {
@@ -182,9 +188,11 @@ object LayoutParser {
                 if (!LAYER.matches(lname)) throw LayoutException("Key $id has a bad layer name")
                 val entry = lo.obj(lname) ?: throw LayoutException("Key $id layer $lname must be an object")
                 val n = entry.optStr("code")
-                // No code: the key is off on this layer, and blank.
-                val shown = if (n == null) "" else entry.optStr("label")?.let { label(it, id) } ?: keycodes.label(n)
-                layers[lname] = LayerOverride(n?.let { resolve(it, keycodes, id) } ?: 0, n, shown)
+                // LAYOUT.md, "Layers": its own label, else its code's default;
+                // no code turns the key off there, blank unless labelled.
+                val own = entry.optStr("label")?.let { label(it, id) }
+                val shown = own ?: if (n == null) "" else keycodes.label(n)
+                layers[lname] = LayerOverride(n?.let { resolve(it, keycodes, id) } ?: 0, n, shown, own)
             }
         }
         val parts = o.opt("parts")?.let { a ->

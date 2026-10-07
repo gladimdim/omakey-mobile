@@ -189,7 +189,7 @@ class KeyboardView(context: Context) : View(context) {
                     canvas.drawText(it, r.left + unit * 0.1f, r.top + unit * 0.26f, subPaint)
                 }
                 // Laptop-style printed Fn legend in the corner.
-                val fn = k.layers["fn"]?.label
+                val fn = k.layers["fn"]?.ownLabel
                 if (fn != null && r.width() > unit * 0.6f) {
                     layerPaint.textSize = unit * 0.16f
                     layerPaint.color = if (pressed) Palette.BG else Palette.LAYER
