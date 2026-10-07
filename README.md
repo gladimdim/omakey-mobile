@@ -11,6 +11,15 @@ Bluetooth keyboard.
 | `android/` | Working: pairing, discovery, Classic QWERTY, layout import |
 | `ios/`     | Planned (M3): SwiftUI + UIView keyboard, Network.framework, CryptoKit |
 
+Two ways to connect:
+
+- **omakeyd** (Omarchy): pair with the QR code. Wi-Fi first, with a
+  Bluetooth fallback when Wi-Fi can't reach the computer.
+- **Bluetooth keyboard** (any computer, tablet or TV): the phone becomes a
+  standard Bluetooth HID keyboard and touchpad, paired in the computer's own
+  Bluetooth settings. Needs a phone that offers the HID Device profile; some
+  makers turn it off.
+
 The desktop side lives in `omakey-omarchy-plugin` and the layout editor in
 `omakey-layout-studio`. The wire protocol is specified in
 `omakey-omarchy-plugin/docs/PROTOCOL.md`, the layout format in
@@ -34,15 +43,20 @@ android/
     ClientSession.kt  socket-free client state machine
     KeyState.kt       held set (ascending, ref-counted) + un-acked event queue
     Pairing.kt        omakey://pair link parser, HostRecord, hex
-  protocol/src/test/  ProtocolTest, TestVectorsTest (+ resources/test-vectors.json)
+    Hid.kt            Bluetooth keyboard mode: HID descriptor, Linux code → usage, reports
+  protocol/src/test/  ProtocolTest, TestVectorsTest, HidTest (+ resources/test-vectors.json)
   app/src/main/java/com/gladimdim/omakey/
     keyboard/KeyboardView.kt   custom View: drawing + raw multi-touch
     keyboard/KeyboardModel.kt  pointer → key/layer logic (unit-tested)
     layout/Layout.kt           layout model, parser, validation, keycode table
     layout/LayoutLink.kt       omakey://layout?d=… (raw DEFLATE, base64url)
-    net/KeyboardLink.kt        UDP thread: timing rules, reconnects, ping
+    net/Link.kt                what the keyboard types through
+    net/KeyboardLink.kt        omakeyd over UDP: timing rules, reconnects, ping
+    net/RfcommLink.kt          omakeyd over Bluetooth RFCOMM, the same packets framed
+    net/FallbackLink.kt        Wi-Fi first, Bluetooth when Wi-Fi doesn't answer
+    net/BluetoothHidLink.kt    the phone as a Bluetooth HID keyboard and mouse
     net/Discovery.kt           NsdManager browse/resolve of _omakey._udp
-    store/Stores.kt            paired hosts, built-in + imported layouts
+    store/Stores.kt            paired hosts, Bluetooth keyboard hosts, layouts
     ui/MainActivity.kt         connect screen, pairing, imports, deep links
     ui/KeyboardActivity.kt     fullscreen keyboard, Wi-Fi lock, status pill
   app/src/main/assets/         keycodes.json, layouts/*.json (synced from the studio)

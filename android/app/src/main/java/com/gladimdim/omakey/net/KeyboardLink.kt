@@ -1,5 +1,6 @@
 package com.gladimdim.omakey.net
 
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import com.gladimdim.omakey.protocol.ClientSession
@@ -16,74 +17,108 @@ import java.nio.channels.Selector
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Owns the UDP socket and the timing rules of PROTOCOL.md on one dedicated
- * thread. The touch thread only updates [keys] and calls [wake]; the network
- * thread notices the change and sends at once.
+ * omakeyd over UDP: the socket and the timing rules of PROTOCOL.md. A key
+ * change is sent by [send] on the touch thread itself, so it leaves the
+ * phone without waiting for another thread to wake up. A dedicated network
+ * thread does the rest: handshake, resends, heartbeats and reading ACKs.
+ *
+ * Everything touching [session] holds its lock, so packet counters go out
+ * in the order they were assigned. Times are Long milliseconds; only the
+ * wire's client_time_ms is truncated to 32 bits.
  */
 class KeyboardLink(
     host: HostRecord,
     phoneName: String,
     val keys: KeyState,
-    private val listener: Listener,
-) {
-    enum class State { CONNECTING, CONNECTED, REJECTED }
-
-    /** Called on the network thread. */
-    interface Listener {
-        fun onState(state: State, hostName: String?)
-        fun onPing(ms: Int)
-    }
-
+    private val listener: Link.Listener,
+    /** Asked before a new session is taken; false when another link has the computer. */
+    private val claim: (Link) -> Boolean = { true },
+) : WifiLink {
     private val session = ClientSession(host, phoneName, keys)
     private val candidates = CopyOnWriteArrayList<InetSocketAddress>()
     @Volatile private var running = false
+    /** Bumped by every [start]: a thread from an earlier start that outlived [stop] sees it and quits. */
+    @Volatile private var generation = 0
     @Volatile private var selector: Selector? = null
+    @Volatile private var channel: DatagramChannel? = null
     private var thread: Thread? = null
 
-    /** The address that answered; reported so it can be tried first next time. */
-    /** WELCOME feature bits of the current session, e.g. [Wire.FEATURE_POINTER]. */
-    @Volatile var features = 0
+    // Guarded by the session lock: what was sent last, and when.
+    private var sentVersion = -1L
+    private var lastSend = 0L
+
+    /** A new candidate arrived: say HELLO to it now, not at the next retry. */
+    @Volatile private var helloNow = false
+
+    @Volatile override var features = 0
         private set
 
-    @Volatile var peer: InetSocketAddress? = null
+    override val transport get() = "Wi-Fi"
+
+    @Volatile override var btAddress: String? = null
+        private set
+
+    @Volatile override var peer: InetSocketAddress? = null
         private set
 
     init {
         for (a in host.addresses) addCandidate(InetSocketAddress(a, host.port))
     }
 
-    /** Another place the computer might be, e.g. found over mDNS. */
-    fun addCandidate(addr: InetSocketAddress) {
-        if (candidates.none { it == addr }) candidates.add(0, addr)
+    override fun addCandidate(addr: InetSocketAddress) {
+        if (candidates.none { it == addr }) {
+            candidates.add(0, addr)
+            helloNow = true
+        }
         wake()
     }
 
-    fun start() {
+    override fun start() {
         if (running) return
         running = true
-        thread = Thread({ run() }, "omakey-net").apply {
-            priority = Thread.MAX_PRIORITY
-            start()
-        }
+        val gen = ++generation
+        thread = Thread({ run(gen) }, "omakey-net").apply { start() }
     }
 
     /** Sends BYE and stops. The server then releases every key we held. */
-    fun stop() {
+    override fun stop() {
         running = false
         wake()
         thread?.join(500)
         thread = null
     }
 
-    /** Wake the network thread: a key changed. Cheap; safe from any thread. */
+    /**
+     * A key changed: send the new state right now, from the calling thread.
+     * The UDP send never blocks. On the main thread this needs network
+     * access allowed in StrictMode (KeyboardActivity does that).
+     */
+    override fun send() {
+        val ch = channel
+        if (ch != null) synchronized(session) { if (session.connected) sendInput(ch, now()) }
+        // The network thread re-arms its resend timer for the new events.
+        wake()
+    }
+
+    /** Wake the network thread. Cheap; safe from any thread. */
     fun wake() {
         selector?.wakeup()
     }
 
-    private fun now(): Int = SystemClock.elapsedRealtime().toInt()
+    private fun now(): Long = SystemClock.elapsedRealtime()
 
-    private fun run() {
-        val channel = try {
+    /** Call with the session lock held. */
+    private fun sendInput(ch: DatagramChannel, now: Long) {
+        val v = keys.version
+        val pkt = session.inputPacket(now.toInt()) ?: return
+        sentVersion = v
+        lastSend = now
+        send(ch, pkt)
+    }
+
+    private fun run(gen: Int) {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
+        val ch = try {
             DatagramChannel.open().apply {
                 configureBlocking(false)
                 // DSCP EF: Wi-Fi WMM puts it in the voice queue, the lowest-latency one.
@@ -95,115 +130,148 @@ class KeyboardLink(
             return
         }
         val sel = Selector.open()
-        channel.register(sel, SelectionKey.OP_READ)
+        ch.register(sel, SelectionKey.OP_READ)
         selector = sel
+        channel = ch
         val rx = ByteBuffer.allocate(Wire.MAX_DATAGRAM)
         val rxArray = rx.array()
+        // A restarted link begins a fresh handshake; the old session got BYE.
+        synchronized(session) { session.restart() }
+        peer = null
+        helloNow = true
 
-        var state: State? = null
-        fun setState(s: State, name: String? = null) {
+        var state: Link.State? = null
+        fun setState(s: Link.State, name: String? = null) {
             if (s != state) {
                 state = s
                 listener.onState(s, name)
             }
         }
-        setState(State.CONNECTING)
+        setState(Link.State.CONNECTING)
 
-        var lastHello = Int.MIN_VALUE / 2
-        var lastSend = 0
-        var lastHeard = 0
-        var sentVersion = -1L
-        var lastPingReport = Int.MIN_VALUE / 2
+        var nextHello = now()
+        var helloInterval = HELLO_FIRST_MS
+        var lastHeard = 0L
+        var lastPingReport = 0L
+        // Smoothed round trip from ACKs. A lost event is resent once an ACK
+        // is clearly overdue, instead of after a fixed RESEND_MS.
+        var srtt = RESEND_MS.toFloat()
+        var resendMs = RESEND_MS
 
+        val alive = { running && gen == generation }
         try {
-            while (running) {
+            while (alive()) {
                 val now = now()
-                var timeout: Int
-                if (!session.connected) {
-                    val interval = if (state == State.REJECTED) 1000 else 250
-                    if (now - lastHello >= interval) {
-                        val pkt = ByteBuffer.wrap(session.helloPacket())
+                var timeout: Long
+                if (!synchronized(session) { session.connected }) {
+                    if (helloNow || now >= nextHello) {
+                        helloNow = false
+                        val pkt = ByteBuffer.wrap(synchronized(session) { session.helloPacket() })
                         for (c in candidates) {
                             pkt.rewind()
-                            try { channel.send(pkt, c) } catch (e: IOException) { /* unreachable now; retry */ }
+                            try { ch.send(pkt, c) } catch (e: IOException) { /* unreachable now; retry */ }
                         }
-                        lastHello = now
+                        // Retry quickly at first, in case the first HELLO was lost:
+                        // after 50 ms, then 100, 200, 250, 250…
+                        nextHello = now + if (state == Link.State.REJECTED) REJECTED_HELLO_MS else helloInterval
+                        helloInterval = minOf(helloInterval * 2, HELLO_MS)
                     }
-                    timeout = interval - (now - lastHello)
+                    timeout = nextHello - now
                 } else {
                     if (now - lastHeard > LOST_MS) {
                         // No ACK for a while: the computer moved, slept or restarted.
-                        session.restart()
+                        synchronized(session) { session.restart() }
                         peer = null
-                        setState(State.CONNECTING)
+                        helloInterval = HELLO_FIRST_MS
+                        nextHello = now
+                        setState(Link.State.CONNECTING)
                         continue
                     }
-                    val v = keys.version
-                    val unacked = keys.hasUnacked
-                    val since = now - lastSend
-                    if (v != sentVersion || (unacked && since >= RESEND_MS) || since >= HEARTBEAT_MS) {
-                        sentVersion = v
-                        session.inputPacket(now)?.let { send(channel, it) }
-                        lastSend = now
+                    timeout = synchronized(session) {
+                        val since = now - lastSend
+                        if (keys.version != sentVersion || (keys.hasUnacked && since >= resendMs) || since >= HEARTBEAT_MS) {
+                            sendInput(ch, now)
+                        }
+                        (if (keys.hasUnacked) resendMs else HEARTBEAT_MS) - (now() - lastSend)
                     }
-                    timeout = (if (keys.hasUnacked) RESEND_MS else HEARTBEAT_MS) - (now() - lastSend)
                 }
 
-                sel.select(timeout.coerceIn(1, 1000).toLong())
+                sel.select(timeout.coerceIn(1, 1000))
                 sel.selectedKeys().clear()
 
                 while (true) {
                     rx.clear()
-                    val from = channel.receive(rx) ?: break
+                    val from = ch.receive(rx) as InetSocketAddress? ?: break
                     val t = now()
-                    when (val r = session.receive(rxArray, rx.position(), t)) {
+                    val r = synchronized(session) {
+                        session.receive(rxArray, rx.position(), t.toInt()) { claim(this) }.also {
+                            if (it is ClientSession.Result.Connected) {
+                                peer = from
+                                sentVersion = -1 // push the held set right away
+                            }
+                        }
+                    }
+                    when (r) {
                         is ClientSession.Result.Connected -> {
-                            peer = from as InetSocketAddress
                             features = r.features
+                            btAddress = r.btAddress
                             lastHeard = t
-                            sentVersion = -1 // push the held set right away
-                            setState(State.CONNECTED, r.hostName)
+                            setState(Link.State.CONNECTED, r.hostName)
                         }
                         is ClientSession.Result.Acked -> {
                             lastHeard = t
+                            srtt += (r.pingMs.coerceAtLeast(0) - srtt) / 8
+                            resendMs = (srtt * 1.5f + 2).toLong().coerceIn(RESEND_MIN_MS, RESEND_MS)
+                            r.leds?.let(listener::onLeds)
                             if (t - lastPingReport >= 250) {
                                 lastPingReport = t
                                 listener.onPing(r.pingMs)
                             }
                         }
-                        ClientSession.Result.Rejected -> setState(State.REJECTED)
+                        // REJECT isn't authenticated: only believe one from where we
+                        // sent HELLO, so a stranger can't slow our retries.
+                        ClientSession.Result.Rejected -> if (from in candidates) setState(Link.State.REJECTED)
                         null -> {}
                     }
                 }
             }
             // Leaving: BYE twice, in case one is lost. The server's 500 ms
             // stuck-key timeout covers the rest.
-            session.byePacket()?.let { bye ->
-                send(channel, bye)
-                session.byePacket()?.let { send(channel, it) }
+            synchronized(session) {
+                session.byePacket()?.let { bye ->
+                    send(ch, bye)
+                    session.byePacket()?.let { send(ch, it) }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "network thread died", e)
         } finally {
-            selector = null
+            // A newer start() may already own these fields.
+            if (channel === ch) channel = null
+            if (selector === sel) selector = null
             try { sel.close() } catch (e: IOException) {}
-            try { channel.close() } catch (e: IOException) {}
+            try { ch.close() } catch (e: IOException) {}
         }
     }
 
-    private fun send(channel: DatagramChannel, data: ByteArray) {
+    private fun send(ch: DatagramChannel, data: ByteArray) {
         val p = peer ?: return
         try {
-            channel.send(ByteBuffer.wrap(data), p)
+            ch.send(ByteBuffer.wrap(data), p)
         } catch (e: IOException) {
-            // Wi-Fi blip; the next send or the heartbeat retries.
+            // Wi-Fi blip, or the socket just closed; the next send or the heartbeat retries.
         }
     }
 
     companion object {
         private const val TAG = "omakey"
-        const val RESEND_MS = 20
-        const val HEARTBEAT_MS = 100
-        const val LOST_MS = 1500
+        /** Resend bounds for un-acknowledged events; the actual wait follows the measured ping. */
+        const val RESEND_MIN_MS = 5L
+        const val RESEND_MS = 20L
+        const val HEARTBEAT_MS = 100L
+        const val HELLO_FIRST_MS = 50L
+        const val HELLO_MS = 250L
+        const val REJECTED_HELLO_MS = 1000L
+        const val LOST_MS = 1500L
     }
 }

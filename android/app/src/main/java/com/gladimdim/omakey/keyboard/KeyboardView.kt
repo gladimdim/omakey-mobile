@@ -49,15 +49,39 @@ class KeyboardView(context: Context) : View(context) {
         isHapticFeedbackEnabled = true
     }
 
-    /** Caps Lock as sent from here; kept when the layout changes. */
+    /** Caps Lock as sent from here or reported by the computer; kept when the layout changes. */
     private val locks = KeyboardModel.Locks()
+
+    /** False for a preview: touches do nothing. */
+    var interactive = true
+
+    /** Tap modifiers and Fn instead of holding them (see [KeyboardModel.sticky]). */
+    var sticky = false
+        set(value) {
+            field = value
+            model?.sticky = value
+            invalidate()
+        }
+
+    // Fitted label sizes, measured again only when a key's label changes.
+    private var fittedLabel: Array<String?> = emptyArray()
+    private var fittedSize = FloatArray(0)
 
     fun setLayout(layout: Layout, sink: KeyboardModel.Sink) {
         model?.cancelAll()
-        model = KeyboardModel(layout, sink, locks)
+        model = KeyboardModel(layout, sink, locks).also { it.sticky = sticky }
         rects = Array(layout.keys.size) { RectF() }
         shapes = arrayOfNulls(layout.keys.size)
+        fittedLabel = arrayOfNulls(layout.keys.size)
+        fittedSize = FloatArray(layout.keys.size)
         computeGeometry()
+        invalidate()
+    }
+
+    /** The computer's Caps Lock light, when it reports it. */
+    fun setCapsLock(on: Boolean) {
+        if (locks.capsLock == on) return
+        locks.capsLock = on
         invalidate()
     }
 
@@ -88,6 +112,9 @@ class KeyboardView(context: Context) : View(context) {
         originY = (height - unit * l.height) / 2
         val gap = unit * 0.05f
         val radius = unit * 0.12f
+        // Sizes changed: fit every label again; prime the hit-test rectangles.
+        fittedLabel.fill(null)
+        m.hitTestStretched(0f, 0f, stretch)
         l.keys.forEachIndexed { i, k ->
             val drawn = k.rects.map { it.stretched(split, stretch) }
             val main = drawn[0]
@@ -100,6 +127,7 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
+        if (!interactive) return false
         val m = model ?: return false
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
@@ -125,7 +153,7 @@ class KeyboardView(context: Context) : View(context) {
         for (i in keys.indices) {
             val k = keys[i]
             val r = rects[i]
-            val pressed = m.pressCount[i] > 0
+            val pressed = m.pressCount[i] > 0 || m.isLatched(i)
             keyPaint.color = when {
                 pressed -> Palette.ACCENT
                 k.layer != null && k.layer == layer -> Palette.ACCENT
@@ -147,7 +175,12 @@ class KeyboardView(context: Context) : View(context) {
                 k.style == KeyStyle.ACCENT -> Palette.FG_ON_ACCENT
                 else -> Palette.FG
             }
-            drawFitted(canvas, label, r, if (label.length <= 2) 0.4f else 0.24f)
+            drawFitted(canvas, i, label, r, if (label.length <= 2) 0.4f else 0.24f)
+            if (m.isLocked(i)) {
+                // A locked modifier: a bar under its label.
+                keyPaint.color = Palette.BG
+                canvas.drawRect(r.centerX() - unit * 0.15f, r.bottom - unit * 0.12f, r.centerX() + unit * 0.15f, r.bottom - unit * 0.08f, keyPaint)
+            }
 
             if (layer == null) {
                 m.subFor(i)?.let {
@@ -197,12 +230,16 @@ class KeyboardView(context: Context) : View(context) {
         const val KEY_CAPSLOCK = 58
     }
 
-    private fun drawFitted(canvas: Canvas, text: String, r: RectF, sizeUnits: Float) {
+    private fun drawFitted(canvas: Canvas, index: Int, text: String, r: RectF, sizeUnits: Float) {
         if (text.isEmpty()) return
-        labelPaint.textSize = unit * sizeUnits
-        val maxW = r.width() - unit * 0.12f
-        val w = labelPaint.measureText(text)
-        if (w > maxW) labelPaint.textSize *= maxW / w
+        if (fittedLabel[index] != text) {
+            labelPaint.textSize = unit * sizeUnits
+            val maxW = r.width() - unit * 0.12f
+            val w = labelPaint.measureText(text)
+            fittedSize[index] = if (w > maxW) labelPaint.textSize * maxW / w else labelPaint.textSize
+            fittedLabel[index] = text
+        }
+        labelPaint.textSize = fittedSize[index]
         val y = r.centerY() - (labelPaint.ascent() + labelPaint.descent()) / 2
         canvas.drawText(text, r.centerX(), y, labelPaint)
     }

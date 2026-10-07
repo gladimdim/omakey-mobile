@@ -257,4 +257,49 @@ class ProtocolTest {
         assertEquals(Wire.FEATURE_POINTER, Welcome.decode(enc)!!.features)
         assertEquals(0, Welcome.decode(enc.copyOf(enc.size - 1))!!.features)
     }
+
+    @Test
+    fun bluetoothAddressComesFromThePairingLinkAndWelcome() {
+        val link = "omakey://pair?v=1&h=0102030405060708&n=desk&a=192.168.1.5&p=47800" +
+            "&d=0909090909090909&k=" + Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32)) +
+            "&b=1418c368871e"
+        assertEquals("14:18:C3:68:87:1E", PairingUri.parse(link).btAddress)
+        assertNull(PairingUri.parse(link.substringBefore("&b=")).btAddress)
+
+        val bt = hex("1418c368871e")
+        val w = Welcome(ByteArray(16), ByteArray(16), 5, "desk", Wire.FEATURE_POINTER, bt)
+        assertArrayEquals(bt, Welcome.decode(w.encode())!!.btAddress)
+        assertNull(Welcome.decode(Welcome(ByteArray(16), ByteArray(16), 5, "desk", 1).encode())!!.btAddress)
+    }
+
+    @Test
+    fun ackCarriesLockLightsWhenTheServerSendsThem() {
+        assertNull(Ack.decode(Ack(5, 7).encode())!!.leds)
+        val a = Ack.decode(Ack(5, 7, Ack.LED_CAPS).encode())!!
+        assertEquals(7, a.lastEseq)
+        assertEquals(Ack.LED_CAPS, a.leds)
+    }
+
+    @Test
+    fun aWelcomeThatIsntClaimedChangesNothing() {
+        val host = HostRecord("0102030405060708", "desk", listOf("10.0.0.2"), 47800, ByteArray(8) { 9 }, ByteArray(32) { 3 })
+        val keys = KeyState()
+        val client = ClientSession(host, "phone", keys)
+        keys.press(30) // an event waiting to be acknowledged
+        val hello = Hello.decode(Packet.parse(client.helloPacket())!!.open(Aead(host.key))!!)!!
+        val welcome = Wire.seal(Wire.WELCOME, host.deviceId, ByteArray(12), Aead(host.key),
+            Welcome(hello.clientRandom, ByteArray(16) { 2 }, 99, "desk").encode())
+        assertNull(client.receive(welcome, welcome.size, 0) { false })
+        assertFalse(client.connected)
+        assertTrue(keys.hasUnacked) // not reset by a WELCOME we didn't take
+        assertNotNull(client.receive(welcome, welcome.size, 0) { true })
+        assertTrue(client.connected)
+    }
+
+    @Test
+    fun fingerprintIsTheStartOfTheKeysSha256() {
+        val h = HostRecord("0102030405060708", "desk", listOf("10.0.0.2"), 47800, ByteArray(8), ByteArray(32))
+        // SHA-256 of 32 zero bytes starts 66687aad.
+        assertEquals("6668-7AAD", h.fingerprint)
+    }
 }

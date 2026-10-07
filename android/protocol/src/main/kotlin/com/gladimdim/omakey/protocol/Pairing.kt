@@ -12,13 +12,25 @@ data class HostRecord(
     val port: Int,
     val deviceId: ByteArray,
     val key: ByteArray,
+    /** The computer's Bluetooth adapter, "AA:BB:CC:DD:EE:FF", for the Bluetooth fallback. */
+    val btAddress: String? = null,
 ) {
     val deviceIdHex: String get() = Hex.encode(deviceId)
+
+    /**
+     * A short code for the pairing key, "ABCD-1234": the first 4 bytes of
+     * SHA-256(key). omakeyd shows the same code under its QR code, so a
+     * pairing link that didn't come from your computer can be told apart.
+     */
+    val fingerprint: String
+        get() = Hex.encode(java.security.MessageDigest.getInstance("SHA-256").digest(key).copyOf(4))
+            .uppercase().let { it.substring(0, 4) + "-" + it.substring(4) }
 
     override fun equals(other: Any?): Boolean =
         other is HostRecord && hostId == other.hostId && name == other.name &&
             addresses == other.addresses && port == other.port &&
-            deviceId.contentEquals(other.deviceId) && key.contentEquals(other.key)
+            deviceId.contentEquals(other.deviceId) && key.contentEquals(other.key) &&
+            btAddress == other.btAddress
 
     override fun hashCode(): Int = hostId.hashCode()
 }
@@ -26,7 +38,7 @@ data class HostRecord(
 class PairingException(message: String) : Exception(message)
 
 /**
- * Parses `omakey://pair?v=1&h=<host id>&n=<name>&a=<ip>,<ip>&p=<port>&d=<device id>&k=<key>`.
+ * Parses `omakey://pair?v=1&h=<host id>&n=<name>&a=<ip>,<ip>&p=<port>&d=<device id>&k=<key>[&b=<bt address>]`.
  */
 object PairingUri {
     private val IPV4 = Regex("^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$")
@@ -54,9 +66,13 @@ object PairingUri {
         val addresses = (q["a"] ?: "").split(',').map { it.trim() }.filter { IPV4.matches(it) }
         if (addresses.isEmpty()) throw PairingException("Pairing link has no addresses")
         val name = q["n"]?.takeIf { it.isNotBlank() } ?: hostId
+        val bt = q["b"]?.takeIf { Hex.isHex(it, 6) }?.let { btAddress(Hex.decode(it)) }
 
-        return HostRecord(hostId, name, addresses, port, deviceId, key)
+        return HostRecord(hostId, name, addresses, port, deviceId, key, bt)
     }
+
+    /** Six address bytes as Android writes them: "AA:BB:CC:DD:EE:FF". */
+    fun btAddress(b: ByteArray): String = Hex.encode(b).uppercase().chunked(2).joinToString(":")
 
     private fun query(raw: String): Map<String, String> =
         raw.split('&').filter { it.isNotEmpty() }.associate { part ->

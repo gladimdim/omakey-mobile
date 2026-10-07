@@ -4,19 +4,25 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** Linux key names ↔ codes, from the studio's keycodes.json. */
-class Keycodes(private val byName: Map<String, Int>) {
+/** Linux key names ↔ codes and default labels, from the studio's keycodes.json. */
+class Keycodes(private val byName: Map<String, Int>, private val labels: Map<String, String> = emptyMap()) {
     fun code(name: String): Int? = byName[name]
+
+    /** The label a key with this code shows by default: keycodes.json's, else the name without `KEY_`. */
+    fun label(name: String): String = labels[name] ?: name.removePrefix("KEY_")
 
     companion object {
         fun parse(json: String): Keycodes {
             val keys = JSONObject(json).getJSONArray("keys")
             val map = HashMap<String, Int>(keys.length() * 2)
+            val labels = HashMap<String, String>(keys.length() * 2)
             for (i in 0 until keys.length()) {
                 val k = keys.getJSONObject(i)
-                map[k.getString("name")] = k.getInt("code")
+                val name = k.getString("name")
+                map[name] = k.getInt("code")
+                k.optString("label").takeIf { it.isNotEmpty() }?.let { labels[name] = it }
             }
-            return Keycodes(map)
+            return Keycodes(map, labels)
         }
 
         /** Codes the daemon accepts (PROTOCOL.md, "Safety rules"). */
@@ -26,7 +32,11 @@ class Keycodes(private val byName: Map<String, Int>) {
 
 enum class KeyStyle { NORMAL, MOD, FKEY, ACCENT, SPACE }
 
-/** A key's behaviour on one layer. [code] 0 means the key does nothing there. */
+/**
+ * A key's behaviour on one layer. [code] 0 means the key does nothing there
+ * (and shows no label); otherwise [label] is the override's own label or its
+ * code's default one (LAYOUT.md, `layers`).
+ */
 class LayerOverride(val code: Int, val codeName: String?, val label: String?)
 
 /** A rectangle in layout units. */
@@ -92,30 +102,36 @@ object LayoutParser {
     private const val MAX_KEYS = 256
     private const val MAX_LABEL = 16
     private const val MAX_PARTS = 8
+    /** Deeper JSON is refused before parsing: org.json recurses, and a tiny link could overflow the stack. */
+    private const val MAX_DEPTH = 32
     private val ID = Regex("^[a-z0-9][a-z0-9-]{0,63}$")
     private val LAYER = Regex("^[a-z][a-z0-9]{0,15}$")
 
     fun parse(json: String, keycodes: Keycodes): Layout {
         if (json.length > MAX_BYTES) throw LayoutException("Layout is larger than 256 KB")
+        if (nesting(json) > MAX_DEPTH) throw LayoutException("Layout is nested too deeply")
         val root = try {
             JSONObject(json)
         } catch (e: JSONException) {
             throw LayoutException("Not valid JSON: ${e.message}")
+        } catch (e: StackOverflowError) {
+            throw LayoutException("Layout is nested too deeply")
         }
         try {
-            if (root.optString("format") != "omakey-layout") throw LayoutException("Not an Omakey layout file")
-            if (root.optInt("version", -1) != 1) {
-                throw LayoutException("Layout version ${root.opt("version")} is not supported; update the app")
+            if (root.opt("format") != "omakey-layout") throw LayoutException("Not an Omakey layout file")
+            val version = root.opt("version")
+            if (!(version is Number && version.toDouble() == 1.0)) {
+                throw LayoutException("Layout version $version is not supported; update the app")
             }
-            val id = root.getString("id")
+            val id = root.str("id")
             if (!ID.matches(id)) throw LayoutException("Bad layout id \"$id\"")
-            val name = root.getString("name").also {
-                if (it.isEmpty() || it.length > 64) throw LayoutException("Layout name must be 1-64 characters")
+            val name = root.str("name").also {
+                if (it.isEmpty() || it.codePointCount(0, it.length) > 64) throw LayoutException("Layout name must be 1-64 characters")
             }
-            val width = root.getDouble("width").toFloat()
-            val height = root.getDouble("height").toFloat()
+            val width = root.num("width")
+            val height = root.num("height")
             if (!(width > 0 && width <= 64 && height > 0 && height <= 32)) throw LayoutException("Bad layout size")
-            val splitAt = if (root.has("splitAt")) root.getDouble("splitAt").toFloat() else null
+            val splitAt = if (root.has("splitAt")) root.num("splitAt") else null
             if (splitAt != null && !(splitAt > 0 && splitAt < width)) throw LayoutException("splitAt must be inside the layout")
 
             val arr: JSONArray = root.getJSONArray("keys")
@@ -125,7 +141,7 @@ object LayoutParser {
             val ids = HashSet<String>()
             val keys = List(arr.length()) { i -> parseKey(arr.getJSONObject(i), keycodes, ids) }
             return Layout(
-                id, name, root.optStringOrNull("author"), root.optStringOrNull("description"),
+                id, name, root.optStr("author"), root.optStr("description"),
                 width, height, keys, json, splitAt,
             )
         } catch (e: JSONException) {
@@ -134,25 +150,24 @@ object LayoutParser {
     }
 
     private fun parseKey(o: JSONObject, keycodes: Keycodes, ids: MutableSet<String>): LayoutKey {
-        val id = o.getString("id")
+        val id = o.str("id")
         if (id.isEmpty() || id.length > 64 || !ids.add(id)) throw LayoutException("Duplicate or bad key id \"$id\"")
-        fun num(name: String) = o.getDouble(name).toFloat()
-        val x = num("x")
-        val y = num("y")
-        val w = num("w")
-        val h = num("h")
+        val x = o.num("x")
+        val y = o.num("y")
+        val w = o.num("w")
+        val h = o.num("h")
         if (x < 0 || y < 0) throw LayoutException("Key $id has a negative position")
         if (w !in 0.25f..16f || h !in 0.25f..16f) throw LayoutException("Key $id size must be 0.25-16 units")
 
-        val label = label(o.getString("label"), id)
-        val sub = o.optStringOrNull("sub")?.let { label(it, id) }
-        val codeName = o.optStringOrNull("code")
-        val layer = o.optStringOrNull("layer")
+        val label = label(o.str("label"), id)
+        val sub = o.optStr("sub")?.let { label(it, id) }
+        val codeName = o.optStr("code")
+        val layer = o.optStr("layer")
         if ((codeName == null) == (layer == null)) throw LayoutException("Key $id needs exactly one of code or layer")
         if (layer != null && !LAYER.matches(layer)) throw LayoutException("Key $id has a bad layer name")
         val code = codeName?.let { resolve(it, keycodes, id) } ?: 0
 
-        val style = when (val s = o.optString("style", "normal")) {
+        val style = when (val s = o.optStr("style") ?: "normal") {
             "normal" -> KeyStyle.NORMAL
             "mod" -> KeyStyle.MOD
             "fkey" -> KeyStyle.FKEY
@@ -162,23 +177,22 @@ object LayoutParser {
         }
 
         val layers = HashMap<String, LayerOverride>()
-        o.optJSONObject("layers")?.let { lo ->
+        o.obj("layers")?.let { lo ->
             for (lname in lo.keys()) {
                 if (!LAYER.matches(lname)) throw LayoutException("Key $id has a bad layer name")
-                val entry = lo.getJSONObject(lname)
-                val n = entry.optStringOrNull("code")
-                layers[lname] = LayerOverride(
-                    n?.let { resolve(it, keycodes, id) } ?: 0, n,
-                    entry.optStringOrNull("label")?.let { label(it, id) },
-                )
+                val entry = lo.obj(lname) ?: throw LayoutException("Key $id layer $lname must be an object")
+                val n = entry.optStr("code")
+                // No code: the key is off on this layer, and blank.
+                val shown = if (n == null) "" else entry.optStr("label")?.let { label(it, id) } ?: keycodes.label(n)
+                layers[lname] = LayerOverride(n?.let { resolve(it, keycodes, id) } ?: 0, n, shown)
             }
         }
-        val parts = o.optJSONArray("parts")?.let { arr ->
+        val parts = o.opt("parts")?.let { a ->
+            val arr = a as? JSONArray ?: throw LayoutException("Key $id parts must be a list")
             if (arr.length() !in 1..MAX_PARTS) throw LayoutException("Key $id must have 1-$MAX_PARTS parts")
             List(arr.length()) { n ->
-                val p = arr.getJSONObject(n)
-                val r = KeyRect(p.getDouble("x").toFloat(), p.getDouble("y").toFloat(),
-                    p.getDouble("w").toFloat(), p.getDouble("h").toFloat())
+                val p = arr.opt(n) as? JSONObject ?: throw LayoutException("Key $id part ${n + 1} must be an object")
+                val r = KeyRect(p.num("x"), p.num("y"), p.num("w"), p.num("h"))
                 if (r.x < 0 || r.y < 0 || r.w !in 0.25f..16f || r.h !in 0.25f..16f) {
                     throw LayoutException("Key $id part ${n + 1} has a bad position or size")
                 }
@@ -199,6 +213,47 @@ object LayoutParser {
         return s
     }
 
-    private fun JSONObject.optStringOrNull(name: String): String? =
-        if (has(name) && !isNull(name)) getString(name) else null
+    // Typed reads: the schema's types, no coercion ("1" is not a number, 7 is not a label).
+
+    private fun JSONObject.str(name: String): String =
+        opt(name) as? String ?: throw LayoutException("\"$name\" must be text")
+
+    private fun JSONObject.optStr(name: String): String? = when (val v = opt(name)) {
+        null, JSONObject.NULL -> null
+        is String -> v
+        else -> throw LayoutException("\"$name\" must be text")
+    }
+
+    private fun JSONObject.num(name: String): Float {
+        val v = opt(name) as? Number ?: throw LayoutException("\"$name\" must be a number")
+        val f = v.toFloat()
+        if (!f.isFinite()) throw LayoutException("\"$name\" must be a number")
+        return f
+    }
+
+    private fun JSONObject.obj(name: String): JSONObject? = when (val v = opt(name)) {
+        null, JSONObject.NULL -> null
+        is JSONObject -> v
+        else -> throw LayoutException("\"$name\" must be an object")
+    }
+
+    /** Deepest nesting of objects and arrays, ignoring brackets inside strings. */
+    internal fun nesting(json: String): Int {
+        var depth = 0
+        var max = 0
+        var inString = false
+        var i = 0
+        while (i < json.length) {
+            val c = json[i]
+            if (inString) {
+                if (c == '\\') i++ else if (c == '"') inString = false
+            } else when (c) {
+                '"' -> inString = true
+                '{', '[' -> { depth++; if (depth > max) max = depth }
+                '}', ']' -> depth--
+            }
+            i++
+        }
+        return max
+    }
 }

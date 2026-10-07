@@ -123,12 +123,15 @@ class Welcome(
     val name: String,
     /** [Wire.FEATURE_POINTER] and friends; 0 from servers that predate them. */
     val features: Int = 0,
+    /** The server's Bluetooth adapter, 6 bytes; null when it has none. */
+    val btAddress: ByteArray? = null,
 ) {
     fun encode(): ByteArray {
         val nameBytes = truncateUtf8(name, 255)
-        return ByteBuffer.allocate(Wire.RANDOM_LEN * 2 + 4 + 1 + nameBytes.size + 1)
+        val bt = btAddress ?: ByteArray(0)
+        return ByteBuffer.allocate(Wire.RANDOM_LEN * 2 + 4 + 1 + nameBytes.size + 1 + bt.size)
             .put(clientRandom).put(serverRandom).putInt(sessionId)
-            .put(nameBytes.size.toByte()).put(nameBytes).put(features.toByte()).array()
+            .put(nameBytes.size.toByte()).put(nameBytes).put(features.toByte()).put(bt).array()
     }
 
     companion object {
@@ -139,7 +142,8 @@ class Welcome(
             val sid = buf.int
             val n = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }
             val features = if (buf.hasRemaining()) buf.get().toInt() and 0xFF else 0
-            Welcome(cr, sr, sid, String(n, Charsets.UTF_8), features)
+            val bt = if (buf.remaining() >= 6) ByteArray(6).also { buf.get(it) } else null
+            Welcome(cr, sr, sid, String(n, Charsets.UTF_8), features, bt)
         } catch (e: RuntimeException) {
             null
         }
@@ -198,13 +202,27 @@ class Input(
     }
 }
 
-class Ack(val clientTimeMs: Int, val lastEseq: Int) {
-    fun encode(): ByteArray = ByteBuffer.allocate(6).putInt(clientTimeMs).putShort(lastEseq.toShort()).array()
+/**
+ * [leds]: the computer's lock lights, bit 0 Num Lock, bit 1 Caps Lock,
+ * bit 2 Scroll Lock; null from servers that don't send them.
+ */
+class Ack(val clientTimeMs: Int, val lastEseq: Int, val leds: Int? = null) {
+    fun encode(): ByteArray {
+        val buf = ByteBuffer.allocate(if (leds != null) 7 else 6).putInt(clientTimeMs).putShort(lastEseq.toShort())
+        if (leds != null) buf.put(leds.toByte())
+        return buf.array()
+    }
 
     companion object {
+        const val LED_NUM = 1
+        const val LED_CAPS = 2
+        const val LED_SCROLL = 4
+
         fun decode(b: ByteArray): Ack? =
             if (b.size < 6) null
-            else ByteBuffer.wrap(b).let { Ack(it.int, it.short.toInt() and 0xFFFF) }
+            else ByteBuffer.wrap(b).let {
+                Ack(it.int, it.short.toInt() and 0xFFFF, if (it.hasRemaining()) it.get().toInt() and 0xFF else null)
+            }
     }
 }
 

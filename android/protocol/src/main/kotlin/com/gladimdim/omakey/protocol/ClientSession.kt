@@ -15,8 +15,15 @@ class ClientSession(
 ) {
     sealed interface Result {
         /** Handshake finished; the server is called [hostName]. */
-        data class Connected(val hostName: String, val sessionId: Int, val features: Int = 0) : Result
-        data class Acked(val pingMs: Int) : Result
+        data class Connected(
+            val hostName: String,
+            val sessionId: Int,
+            val features: Int = 0,
+            /** Where to reach the computer over Bluetooth, "AA:BB:…"; null without Bluetooth. */
+            val btAddress: String? = null,
+        ) : Result
+        /** [leds]: the computer's lock lights ([Ack.LED_CAPS], …), or null when it doesn't say. */
+        data class Acked(val pingMs: Int, val leds: Int? = null) : Result
         data object Rejected : Result
     }
 
@@ -63,23 +70,29 @@ class ClientSession(
         return Wire.seal(Wire.BYE, host.deviceId, Wire.counterNonce(sessionId, ++sendCounter), aead, ByteArray(0))
     }
 
-    /** Digest one received datagram; null when it's not for us or doesn't verify. */
-    fun receive(data: ByteArray, length: Int, nowMs: Int): Result? {
+    /**
+     * Digest one received datagram; null when it's not for us or doesn't
+     * verify. A valid new WELCOME is only taken when [claim] agrees (another
+     * transport may already be typing for this phone); otherwise nothing
+     * changes, the shared [keys] included.
+     */
+    fun receive(data: ByteArray, length: Int, nowMs: Int, claim: () -> Boolean = { true }): Result? {
         val p = Packet.parse(data, length) ?: return null
         if (!p.deviceId.contentEquals(host.deviceId)) return null
         return when (p.type) {
-            Wire.WELCOME -> onWelcome(p)
+            Wire.WELCOME -> onWelcome(p, claim)
             Wire.ACK -> onAck(p, nowMs)
             Wire.REJECT -> if (!connected && p.bodyLength >= 1) Result.Rejected else null
             else -> null
         }
     }
 
-    private fun onWelcome(p: Packet): Result? {
+    private fun onWelcome(p: Packet, claim: () -> Boolean): Result? {
         val w = Welcome.decode(p.open(deviceAead) ?: return null) ?: return null
         if (!w.clientRandom.contentEquals(clientRandom)) return null
         // A duplicate WELCOME for the session we already have.
         if (connected && w.sessionId == sessionId) return null
+        if (!claim()) return null
         val k = SessionKeys.derive(host.key, clientRandom, w.serverRandom)
         c2s = Aead(k.clientToServer)
         s2c = Aead(k.serverToClient)
@@ -88,7 +101,7 @@ class ClientSession(
         recvCounter = 0
         connected = true
         keys.resetSession()
-        return Result.Connected(w.name, w.sessionId, w.features)
+        return Result.Connected(w.name, w.sessionId, w.features, w.btAddress?.let(PairingUri::btAddress))
     }
 
     private fun onAck(p: Packet, nowMs: Int): Result? {
@@ -97,6 +110,6 @@ class ClientSession(
         val ack = Ack.decode(p.open(aead) ?: return null) ?: return null
         recvCounter = p.counter
         keys.ack(ack.lastEseq)
-        return Result.Acked(nowMs - ack.clientTimeMs)
+        return Result.Acked(nowMs - ack.clientTimeMs, ack.leds)
     }
 }

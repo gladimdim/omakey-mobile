@@ -101,7 +101,9 @@ class KeyState {
     fun buildInput(clientTimeMs: Int): Input =
         Input(clientTimeMs, 0, heldOrder.copyOf(heldCount), pending.toList(), takePointer())
 
-    private fun takePointer(): Pointer? {
+    /** Motion and scroll gathered since the last call, in whole counts; null when none. */
+    @Synchronized
+    fun takePointer(): Pointer? {
         fun take(v: Float): Int = v.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
         val p = Pointer(take(moveX), take(moveY), take(wheel), take(hwheel))
         if (p.dx == 0 && p.dy == 0 && p.wheel == 0 && p.hwheel == 0) return null

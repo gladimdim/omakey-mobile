@@ -7,6 +7,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import com.gladimdim.omakey.protocol.Wire
 import com.gladimdim.omakey.ui.Palette
@@ -18,7 +19,9 @@ import kotlin.math.hypot
  * buttons.
  *
  * - One finger moves the pointer. A quick tap clicks; tap and hold
- *   right-clicks (a context menu).
+ *   right-clicks (a context menu). Tap, then touch again and move: drag
+ *   with the left button held (tap twice quickly for a double click).
+ *   Lifting one finger of a two-finger scroll goes back to moving.
  * - Two fingers scroll, both ways, content following the fingers. A
  *   two-finger tap right-clicks; a three-finger tap middle-clicks.
  * - Down each side, mirrored: Left click, Right click, Ctrl + Left and
@@ -132,8 +135,22 @@ class TouchpadView(context: Context) : View(context) {
     private var moving = false
     private var longPressed = false
 
+    // Tap-and-drag: a tap's click waits briefly, in case a second touch
+    // turns it into a drag.
+    private var pendingClick = false
+    private var tapDragging = false
+    private var dragMoved = false
+    private val flushClick = Runnable {
+        if (pendingClick) {
+            pendingClick = false
+            click(Wire.BTN_LEFT)
+        }
+    }
+
+    private val velocity = VelocityTracker.obtain()
+
     private val longPress = Runnable {
-        if (padFingers == 1 && maxFingers == 1 && !moving) {
+        if (padFingers == 1 && maxFingers == 1 && !moving && !tapDragging) {
             longPressed = true
             click(Wire.BTN_RIGHT)
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -187,6 +204,17 @@ class TouchpadView(context: Context) : View(context) {
     /** Let go of every button, e.g. when the touchpad is put away. */
     fun releaseAll() {
         removeCallbacks(longPress)
+        // A gesture that was swiping the panel snaps back instead of freezing half way.
+        for (id in 0 until MAX_POINTERS) if (role[id] == SWIPE) panelDrag?.release(0f, false)
+        removeCallbacks(flushClick)
+        if (pendingClick) {
+            pendingClick = false
+            click(Wire.BTN_LEFT)
+        }
+        if (tapDragging) {
+            tapDragging = false
+            sink?.button(Wire.BTN_LEFT, false)
+        }
         for (b in buttons) {
             if (b.held > 0) {
                 b.held = 1
@@ -199,6 +227,10 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
+        // Deliver every move as the digitizer reports it. By default Android
+        // holds moves until the next frame and resamples them, which adds
+        // up to a frame plus 5 ms to every pointer motion.
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) requestUnbufferedDispatch(ev)
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> fingerDown(ev, ev.actionIndex)
             MotionEvent.ACTION_MOVE -> fingersMoved(ev)
@@ -234,12 +266,22 @@ class TouchpadView(context: Context) : View(context) {
             role[id] = STRIP
             swipeStartY[id] = y
             swipeDownAt[id] = ev.eventTime
+            velocity.clear()
+            velocity.addMovement(ev)
             return
         }
         if (!pad.contains(x, y)) return
         role[id] = PAD
         padFingers++
         if (padFingers == 1) {
+            if (pendingClick) {
+                // A touch right after a tap: hold the button and drag.
+                removeCallbacks(flushClick)
+                pendingClick = false
+                tapDragging = true
+                dragMoved = false
+                sink?.button(Wire.BTN_LEFT, true)
+            }
             gestureStart = ev.eventTime
             startId = id
             startX = x
@@ -256,6 +298,7 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     private fun fingersMoved(ev: MotionEvent) {
+        velocity.addMovement(ev)
         var sumDx = 0f
         var sumDy = 0f
         var n = 0
@@ -283,10 +326,11 @@ class TouchpadView(context: Context) : View(context) {
         val dy = sumDy / n
         travelled += abs(dx) + abs(dy)
         val s = sink ?: return
-        if (maxFingers == 1) {
+        if (padFingers == 1) {
             val i = ev.findPointerIndex(startId)
             if (!moving && i >= 0 && hypot(ev.getX(i) - startX, ev.getY(i) - startY) > slop) {
                 moving = true
+                dragMoved = true
                 removeCallbacks(longPress)
             }
             if (moving) s.motion(dx * motionScale * sensitivity, dy * motionScale * sensitivity)
@@ -309,8 +353,10 @@ class TouchpadView(context: Context) : View(context) {
             }
             r == SWIPE -> {
                 val dy = ev.getY(index) - swipeStartY[id]
-                val speed = dy / maxOf(1L, ev.eventTime - swipeDownAt[id])
-                panelDrag?.release(dy, speed < -FLING_PX_PER_MS * density)
+                // The finger's speed as it let go, not the whole swipe's average.
+                velocity.addMovement(ev)
+                velocity.computeCurrentVelocity(1000)
+                panelDrag?.release(dy, velocity.getYVelocity(id) < -FLING_PX_PER_MS * 1000 * density)
                 return
             }
             r >= BUTTON -> {
@@ -320,12 +366,32 @@ class TouchpadView(context: Context) : View(context) {
             r != PAD -> return
         }
         padFingers--
+        if (padFingers == 1) {
+            // Back to one finger: it moves the pointer, from where it is now.
+            val left = (0 until MAX_POINTERS).firstOrNull { role[it] == PAD }
+            if (left != null) {
+                startId = left
+                startX = lastX[left]
+                startY = lastY[left]
+                moving = false
+            }
+        }
         if (padFingers > 0) return
         removeCallbacks(longPress)
         val duration = ev.eventTime - gestureStart
         val still = travelled < slop * maxFingers
+        if (tapDragging) {
+            tapDragging = false
+            sink?.button(Wire.BTN_LEFT, false)
+            // Touched again without moving: that was a double tap, a double click.
+            if (!dragMoved && maxFingers == 1 && duration < TAP_MS) click(Wire.BTN_LEFT)
+            return
+        }
         when {
-            maxFingers == 1 && !moving && !longPressed && duration < TAP_MS -> click(Wire.BTN_LEFT)
+            maxFingers == 1 && !moving && !longPressed && duration < TAP_MS -> {
+                pendingClick = true
+                postDelayed(flushClick, DRAG_WINDOW_MS)
+            }
             maxFingers == 2 && still && duration < MULTI_TAP_MS -> click(Wire.BTN_RIGHT)
             maxFingers == 3 && still && duration < MULTI_TAP_MS -> click(Wire.BTN_MIDDLE)
         }
@@ -500,6 +566,8 @@ class TouchpadView(context: Context) : View(context) {
         const val TAP_MS = 220L
         const val MULTI_TAP_MS = 300L
         const val LONG_PRESS_MS = 450L
+        /** How long a tap waits for a second touch that would make it a drag. */
+        const val DRAG_WINDOW_MS = 150L
         const val FLING_PX_PER_MS = 0.5f // per density unit
         const val MIN_SENS = 0.3f
         const val MAX_SENS = 3f

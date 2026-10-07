@@ -289,4 +289,113 @@ class LayoutAndKeyboardTest {
             }
         }
     }
+
+    @Test
+    fun stickyModifiersLatchForOneKeyAndLockOnADoubleTap() {
+        val r = Recorder()
+        val m = KeyboardModel(qwerty, r)
+        m.sticky = true
+        val shift = key("leftshift"); val a = key("a"); val b = key("b")
+        // Tap Shift: it stays down for the next key only.
+        m.down(0, shift); m.up(0)
+        assertTrue(m.isLatched(shift))
+        assertEquals("A", m.labelFor(a))
+        m.down(1, a); m.up(1)
+        m.down(2, b); m.up(2)
+        assertEquals(listOf("+42", "+30", "-30", "-42", "+48", "-48"), r.log)
+        assertTrue(!m.isLatched(shift))
+        // Tap twice: locked for every key until a third tap.
+        r.log.clear()
+        m.down(0, shift); m.up(0)
+        m.down(0, shift); m.up(0)
+        assertTrue(m.isLocked(shift))
+        m.down(1, a); m.up(1)
+        m.down(1, b); m.up(1)
+        m.down(0, shift); m.up(0)
+        assertEquals(listOf("+42", "+30", "-30", "+48", "-48", "-42"), r.log)
+    }
+
+    @Test
+    fun heldModifiersStillChordWithStickyOn() {
+        val r = Recorder()
+        val m = KeyboardModel(qwerty, r)
+        m.sticky = true
+        m.down(0, key("leftmeta"))
+        m.down(1, key("space")); m.up(1)
+        m.up(0)
+        assertEquals(listOf("+125", "+57", "-57", "-125"), r.log)
+    }
+
+    @Test
+    fun aTappedFnAppliesToTheNextKeyOnly() {
+        val r = Recorder()
+        val m = KeyboardModel(qwerty, r)
+        m.sticky = true
+        m.down(0, key("fn")); m.up(0)
+        assertEquals("fn", m.activeLayer)
+        m.down(1, key("up")); m.up(1) // PgUp
+        assertNull(m.activeLayer)
+        m.down(1, key("up")); m.up(1) // plain ↑
+        assertEquals(listOf("+104", "-104", "+103", "-103"), r.log)
+    }
+
+    @Test
+    fun cancelLetsGoOfLatchedKeysToo() {
+        val r = Recorder()
+        val m = KeyboardModel(qwerty, r)
+        m.sticky = true
+        m.down(0, key("leftctrl")); m.up(0)
+        assertTrue(m.cancelAll())
+        assertEquals(listOf("+29", "-29"), r.log)
+    }
+
+    private fun minimal(key: String, extra: String = "") =
+        """{"format":"omakey-layout","version":1,"id":"t","name":"T","width":2,"height":1$extra,"keys":[$key]}"""
+
+    @Test
+    fun layerOverridesFollowTheLabelRule() {
+        val l = LayoutParser.parse(minimal(
+            """{"id":"k","x":0,"y":0,"w":1,"h":1,"label":"↑","code":"KEY_UP",
+               "layers":{"fn":{"code":"KEY_PAGEUP"},"nav":{"code":"KEY_HOME","label":"Hm"},"off":{}}}""",
+        ), keycodes)
+        val layers = l.keys[0].layers
+        assertEquals("PgUp", layers["fn"]!!.label) // no label: keycodes.json's
+        assertEquals("Hm", layers["nav"]!!.label)
+        assertEquals("", layers["off"]!!.label) // no code: off and blank
+        assertEquals(0, layers["off"]!!.code)
+    }
+
+    @Test
+    fun theParserTakesTheSchemasTypesWithoutCoercion() {
+        val ok = """{"id":"k","x":0,"y":0,"w":1,"h":1,"label":"A","code":"KEY_A"}"""
+        LayoutParser.parse(minimal(ok), keycodes)
+        for (bad in listOf(
+            minimal(ok.replace("\"x\":0", "\"x\":\"0\"")), // a string as a number
+            minimal(ok.replace("\"label\":\"A\"", "\"label\":7")), // a number as a label
+            minimal(ok).replace("\"version\":1", "\"version\":1.9"),
+            minimal(ok).replace("\"version\":1", "\"version\":\"1\""),
+            minimal(ok.replace("}", ",\"parts\":\"x\"}")),
+            minimal(ok.replace("}", ",\"parts\":[null]}")),
+            minimal(ok.replace("}", ",\"layers\":{\"fn\":3}}")),
+        )) {
+            try {
+                LayoutParser.parse(bad, keycodes)
+                fail("accepted $bad")
+            } catch (e: LayoutException) {
+            }
+        }
+    }
+
+    @Test
+    fun deeplyNestedJsonIsRefusedBeforeParsing() {
+        val deep = minimal("""{"id":"k","x":0,"y":0,"w":1,"h":1,"label":"A","code":"KEY_A"}""", ""","junk":${"[".repeat(5000)}${"]".repeat(5000)}""")
+        try {
+            LayoutParser.parse(deep, keycodes)
+            fail("accepted deep nesting")
+        } catch (e: LayoutException) {
+            assertTrue(e.message!!.contains("nested"))
+        }
+        // Brackets inside strings don't count.
+        assertEquals(1, LayoutParser.nesting("""{"a":"[[[[{{{{"}"""))
+    }
 }
