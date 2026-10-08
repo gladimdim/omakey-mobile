@@ -172,10 +172,10 @@ handle or press Back to return):
 - down each side, mirrored: Left click, Right click, Ctrl + Left and
   Shift + Left, held while touched (drag, Ctrl-click multi-select,
   Shift-click range select with the other thumb on the pad)
-- a strip along the bottom holds the pointer speed: a slider, and a chip
+- a strip along the top holds the pointer speed: a slider, and a chip
   that picks a preset for your monitor (laptop, 1080p, 1440p, 3440×1440
   ultrawide, 4K, 5120×1440…). Each computer keeps its own speed. Swipe up
-  from the strip to put the touchpad away
+  from the grab bar along the bottom to put the touchpad away
 
 It needs omakeyd 0.3 or newer on the computer (the bar widget offers the
 update); with an older one the touchpad says so.
