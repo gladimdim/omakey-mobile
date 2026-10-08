@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Process
 import android.os.SystemClock
 import com.gladimdim.omakey.protocol.ClientSession
+import com.gladimdim.omakey.protocol.ClipTransfer
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
 import com.gladimdim.omakey.protocol.Wire
@@ -81,6 +82,13 @@ class RfcommLink(
     }
 
     override fun send() = wake()
+
+    override fun clip(transfer: ClipTransfer): Boolean {
+        if (features and Wire.FEATURE_CLIPBOARD == 0) return false
+        synchronized(session) { session.clip = transfer }
+        wake()
+        return true
+    }
 
     private fun wake() {
         synchronized(tick) {
@@ -172,7 +180,9 @@ class RfcommLink(
                 val now = now()
                 if (now - lastHeard > LOST_MS) break
                 val pkt: ByteArray?
-                val wait: Long
+                var wait: Long
+                val clipPkt: ByteArray?
+                val clipDone: ClipTransfer.Outcome?
                 synchronized(session) {
                     if (!session.connected) {
                         pkt = if (now >= nextHello) session.helloPacket().also { nextHello = now + HELLO_MS } else null
@@ -186,9 +196,14 @@ class RfcommLink(
                         pkt = null
                         wait = HEARTBEAT_MS - (now - lastSend)
                     }
+                    clipDone = session.clipExpired(now)
+                    clipPkt = session.clipPacket(now)
+                    session.clip?.let { wait = minOf(wait, it.dueAt - now) }
                 }
+                clipDone?.let(listener::onClip)
                 // Written outside the session lock: a slow write holds up nobody else.
                 pkt?.let(::write)
+                clipPkt?.let(::write)
                 sleep(wait)
             }
             if (!running) synchronized(session) { session.byePacket() }?.let(::write)
@@ -234,6 +249,7 @@ class RfcommLink(
                         lastHeard = t // keep asking on this connection, once a second
                         setState(Link.State.REJECTED)
                     }
+                    is ClientSession.Result.ClipDone -> listener.onClip(r.outcome)
                     null -> {}
                 }
                 wake()

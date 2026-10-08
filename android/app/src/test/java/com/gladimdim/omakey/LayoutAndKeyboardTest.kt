@@ -98,8 +98,9 @@ class LayoutAndKeyboardTest {
         val split = LayoutParser.parse(File(assets, "layouts/omakey-pro.json").readText(), keycodes)
         val at = split.splitAt!!
         assertTrue(at > 0 && at < split.width)
-        // Only Enter's bar and Delete cross the split (they stretch with the gap).
-        assertEquals(setOf("center-enter", "center-delete"), split.keys.filter { it.x < at && it.x + it.w > at + 1e-4f }.map { it.id }.toSet())
+        // Only Enter's bar, Delete, and Copy and Paste inside the Enter cross the split (they stretch with the gap).
+        assertEquals(setOf("center-enter", "center-delete", "copy", "paste"),
+            split.keys.filter { it.x < at && it.x + it.w > at + 1e-4f }.map { it.id }.toSet())
         val m = KeyboardModel(split, object : KeyboardModel.Sink {
             override fun keyDown(code: Int) {}
             override fun keyUp(code: Int) {}
@@ -119,8 +120,17 @@ class LayoutAndKeyboardTest {
         // ...and so are both of its 2x2 blocks, the right one moved with the right side.
         assertEquals(enter, m.hitTestStretched(e.parts[0].x + 0.5f, e.parts[0].y + 0.5f, stretch))
         assertEquals(enter, m.hitTestStretched(e.parts[1].x + stretch + 0.5f, e.parts[1].y + 0.5f, stretch))
-        // Above the bar the gap hits nothing; no stretch behaves like hitTest.
-        assertEquals(-1, m.hitTestStretched(at + stretch / 2, e.parts[0].y + 0.5f, stretch))
+        // Inside the U, Copy over Paste, stretched with the gap like Enter around them.
+        val copy = split.keys.indexOfFirst { it.id == "copy" }
+        val paste = split.keys.indexOfFirst { it.id == "paste" }
+        assertEquals(copy, m.hitTestStretched(at + stretch / 2, e.parts[0].y + 0.5f, stretch))
+        assertEquals(paste, m.hitTestStretched(at + stretch / 2, e.y - 0.5f, stretch))
+        assertEquals(e.parts[0].x + e.parts[0].w, split.keys[copy].x, 1e-4f)
+        assertEquals(e.parts[1].x, split.keys[paste].x + split.keys[paste].w, 1e-4f)
+        assertEquals(e.y, split.keys[paste].y + split.keys[paste].h, 1e-4f)
+        // Above them, between Fn and the arrows, the gap hits nothing; no stretch behaves like hitTest.
+        val fn = split.keys.first { it.id == "fn" }
+        assertEquals(-1, m.hitTestStretched(at + stretch / 2, fn.y + 0.5f, stretch))
         assertEquals(bksp, m.hitTestStretched(bk.x + 0.5f, bk.y + 0.5f, 0f))
         // Every bundled split board declares its split.
         for (id in listOf("corne", "ferris-sweep", "lily58", "ergodox", "kinesis-advantage", "alice", "omakey-pro")) {

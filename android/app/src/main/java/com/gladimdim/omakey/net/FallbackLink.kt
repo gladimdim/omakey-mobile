@@ -1,6 +1,7 @@
 package com.gladimdim.omakey.net
 
 import android.content.Context
+import com.gladimdim.omakey.protocol.ClipTransfer
 import com.gladimdim.omakey.protocol.DesktopTheme
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
@@ -95,6 +96,8 @@ class FallbackLink(
         (current() ?: wifi).send()
     }
 
+    override fun clip(transfer: ClipTransfer): Boolean = current()?.clip(transfer) ?: false
+
     /** The Bluetooth permission was just granted: use it if Wi-Fi isn't connected. */
     fun bluetoothAllowedNow() = later { if (current() == null) startBluetooth() }
 
@@ -163,6 +166,10 @@ class FallbackLink(
 
         override fun onTheme(theme: DesktopTheme) {
             if (current() === self()) listener.onTheme(theme)
+        }
+
+        override fun onClip(outcome: ClipTransfer.Outcome) {
+            if (current() === self()) listener.onClip(outcome)
         }
     }
 

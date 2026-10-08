@@ -44,6 +44,7 @@ import com.gladimdim.omakey.net.FallbackLink
 import com.gladimdim.omakey.net.Found
 import com.gladimdim.omakey.net.Link
 import com.gladimdim.omakey.protocol.Ack
+import com.gladimdim.omakey.protocol.ClipTransfer
 import com.gladimdim.omakey.protocol.DesktopTheme
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
@@ -136,13 +137,22 @@ open class KeyboardActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("keyboard", MODE_PRIVATE) }
     private lateinit var stickyButton: TextView
 
+    /** Copy and Paste, with the phone's clipboard when omakeyd has the computer's. */
+    private val clipboard by lazy { ClipboardBridge(this, { link }, ::shortcut) { hostName } }
+
     private val sink = object : KeyboardModel.Sink {
         override fun keyDown(code: Int) {
+            // A layout's Copy and Paste keys are the app's to do, not the computer's.
+            when (code) {
+                ClipboardBridge.KEY_COPY -> return clipboard.copy()
+                ClipboardBridge.KEY_PASTE -> return clipboard.paste()
+            }
             if (keys.press(code)) link?.send()
             typed?.keyDown(code)
         }
 
         override fun keyUp(code: Int) {
+            if (code == ClipboardBridge.KEY_COPY || code == ClipboardBridge.KEY_PASTE) return
             if (keys.release(code)) link?.send()
             typed?.keyUp(code)
             // A key went out: Ctrl or Shift latched on the touchpad, Super or Alt on the key strip, were for it.
@@ -226,6 +236,10 @@ open class KeyboardActivity : Activity() {
                     addView(status, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
                         FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(iconButton(ClipIcon(paste = false, Palette.ACCENT, resources.displayMetrics.density)) { clipboard.copy() }
+                    .apply { contentDescription = "Copy on the computer, to the phone too" })
+                addView(iconButton(ClipIcon(paste = true, Palette.ACCENT, resources.displayMetrics.density)) { clipboard.paste() }
+                    .apply { contentDescription = "Paste on the computer" })
             } else {
                 addView(handle, LinearLayout.LayoutParams(dp(136f), dp(26f)))
                 addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
@@ -495,6 +509,26 @@ open class KeyboardActivity : Activity() {
         setOnClickListener(onClick)
     }
 
+    /** A top-bar button with a drawn icon, padded like [barButton]. */
+    private fun iconButton(icon: android.graphics.drawable.Drawable, onClick: (View) -> Unit) = android.widget.ImageView(this).apply {
+        setImageDrawable(icon)
+        setPadding(dp(11f), dp(4f), dp(11f), dp(4f))
+        isClickable = true
+        setOnClickListener(onClick)
+    }
+
+    /**
+     * Presses [modifier] + [key] on the computer, a step at a time: a
+     * Bluetooth keyboard sends key state, not events, so each step must go
+     * out on its own.
+     */
+    private fun shortcut(modifier: Int, key: Int) {
+        val steps = listOf<() -> Boolean>({ keys.press(modifier) }, { keys.press(key) }, { keys.release(key) }, { keys.release(modifier) })
+        steps.forEachIndexed { i, step ->
+            handler.postDelayed({ if (step()) link?.send() }, i * SHORTCUT_STEP_MS)
+        }
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
@@ -574,6 +608,11 @@ open class KeyboardActivity : Activity() {
                 if (link !== l) return@runOnUiThread
                 keyboard.setCapsLock(leds and Ack.LED_CAPS != 0)
                 typed?.capsLock = leds and Ack.LED_CAPS != 0
+            }
+
+            override fun onClip(outcome: ClipTransfer.Outcome) = runOnUiThread {
+                if (link !== l) return@runOnUiThread
+                clipboard.onOutcome(outcome)
             }
 
             override fun onTheme(theme: DesktopTheme) = runOnUiThread {
@@ -968,6 +1007,8 @@ open class KeyboardActivity : Activity() {
         private const val CUSTOM = "Custom"
         /** A swipe of the top bar faster than this throws the touchpad that way. */
         private const val FLICK_DP_PER_S = 400f
+        /** Between the presses and releases of a Copy or Paste shortcut. */
+        private const val SHORTCUT_STEP_MS = 25L
         /** Ctrl, Alt and Super, left and right: held, a key makes a shortcut. */
         private val SHORTCUT_MODIFIERS = setOf(29, 97, 56, 100, 125, 126)
     }

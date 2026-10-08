@@ -28,6 +28,8 @@ class ClientSession(
          */
         data class Acked(val pingMs: Int, val leds: Int? = null, val theme: DesktopTheme? = null) : Result
         data object Rejected : Result
+        /** The clipboard transfer ended; [clip] has none now. */
+        data class ClipDone(val outcome: ClipTransfer.Outcome) : Result
     }
 
     private val deviceAead = Aead(host.key)
@@ -42,6 +44,9 @@ class ClientSession(
     private var sendCounter = 0L
     private var recvCounter = 0L
 
+    /** The clipboard transfer under way (PROTOCOL.md, CLIP); a new one replaces it. */
+    var clip: ClipTransfer? = null
+
     init {
         restart()
     }
@@ -55,6 +60,8 @@ class ClientSession(
         s2c = null
         sendCounter = 0
         recvCounter = 0
+        // The desktop forgets it with the session.
+        clip?.restart()
     }
 
     fun helloPacket(): ByteArray {
@@ -66,6 +73,20 @@ class ClientSession(
         val aead = c2s ?: return null
         val nonce = Wire.counterNonce(sessionId, ++sendCounter)
         return Wire.seal(Wire.INPUT, host.deviceId, nonce, aead, keys.buildInput(clientTimeMs).encode())
+    }
+
+    /** The clipboard transfer's next CLIP, when one is due at [nowMs]. */
+    fun clipPacket(nowMs: Long): ByteArray? {
+        val aead = c2s ?: return null
+        val body = clip?.body(nowMs) ?: return null
+        return Wire.seal(Wire.CLIP, host.deviceId, Wire.counterNonce(sessionId, ++sendCounter), aead, body)
+    }
+
+    /** Ends a clipboard transfer the desktop stopped answering; its outcome, or null. */
+    fun clipExpired(nowMs: Long): ClipTransfer.Outcome? {
+        if (clip?.expired(nowMs) != true) return null
+        clip = null
+        return ClipTransfer.Outcome.Failed(ClipTransfer.GAVE_UP)
     }
 
     fun byePacket(): ByteArray? {
@@ -85,6 +106,7 @@ class ClientSession(
         return when (p.type) {
             Wire.WELCOME -> onWelcome(p, claim)
             Wire.ACK -> onAck(p, nowMs)
+            Wire.CLIP_REPLY -> onClipReply(p)
             Wire.REJECT -> if (!connected && p.bodyLength >= 1) Result.Rejected else null
             else -> null
         }
@@ -96,6 +118,7 @@ class ClientSession(
         // A duplicate WELCOME for the session we already have.
         if (connected && w.sessionId == sessionId) return null
         if (!claim()) return null
+        clip?.restart()
         val k = SessionKeys.derive(host.key, clientRandom, w.serverRandom)
         c2s = Aead(k.clientToServer)
         s2c = Aead(k.serverToClient)
@@ -114,5 +137,15 @@ class ClientSession(
         recvCounter = p.counter
         keys.ack(ack.lastEseq)
         return Result.Acked(nowMs - ack.clientTimeMs, ack.leds, ack.theme)
+    }
+
+    private fun onClipReply(p: Packet): Result? {
+        val aead = s2c ?: return null
+        if (p.sessionId != sessionId || p.counter <= recvCounter) return null
+        val reply = Clip.decode(p.open(aead) ?: return null, reply = true) ?: return null
+        recvCounter = p.counter
+        val outcome = clip?.onReply(reply) ?: return null
+        clip = null
+        return Result.ClipDone(outcome)
     }
 }

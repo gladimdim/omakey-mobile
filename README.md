@@ -115,6 +115,13 @@ once more to let go); tap Fn and the next key uses the Fn layer. Held in a
 chord, they work as usual. The keyboard follows the computer's Caps Lock
 light where it reports one (omakeyd 0.4+, or Bluetooth keyboard mode).
 
+**Copy** and **Paste** (in portrait mode's top bar, and as keys in layouts
+such as Omakey Pro) copy what's selected on the computer and paste there.
+With an omakeyd that has the clipboard, the phone's clipboard joins in: a
+copy lands on the phone too, and Paste brings the phone's clipboard along
+when it has something newer than what the two last swapped. Elsewhere they are the computer's own
+copy and paste (Ctrl+Insert, Shift+Insert).
+
 ### How it stays fast
 
 - Keys fire on touch-down (`ACTION_DOWN` / `ACTION_POINTER_DOWN`). Each

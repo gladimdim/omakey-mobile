@@ -6,6 +6,8 @@ import java.nio.ByteBuffer
 object Wire {
     /** WELCOME feature bit: the server has a virtual mouse for the touchpad. */
     const val FEATURE_POINTER = 1
+    /** WELCOME feature bit: the server takes CLIP, for the clipboard. */
+    const val FEATURE_CLIPBOARD = 2
     /** Length of the INPUT pointer trailer after its length byte. */
     const val POINTER_LEN = 8
     const val BTN_LEFT = 0x110
@@ -32,6 +34,8 @@ object Wire {
     const val ACK: Byte = 4
     const val BYE: Byte = 5
     const val REJECT: Byte = 6
+    const val CLIP: Byte = 7
+    const val CLIP_REPLY: Byte = 8
 
     const val PLATFORM_ANDROID: Byte = 1
     const val PLATFORM_IOS: Byte = 2
@@ -291,6 +295,65 @@ class Ack(val clientTimeMs: Int, val lastEseq: Int, val leds: Int? = null, val t
                 val leds = if (it.hasRemaining()) it.get().toInt() and 0xFF else null
                 Ack(time, eseq, leds, if (leds != null) DesktopTheme.decode(it) else null)
             }
+    }
+}
+
+/**
+ * CLIP and CLIP_REPLY (PROTOCOL.md): one piece of clipboard text between the
+ * phone and the desktop. A reply has [status] after [clipId]; a CLIP has none.
+ */
+class Clip(
+    val op: Int,
+    val clipId: Int,
+    val status: Int = OK,
+    val offset: Int = 0,
+    val flags: Int = 0,
+    val total: Int = 0,
+    val data: ByteArray = ByteArray(0),
+) {
+    fun encode(reply: Boolean): ByteArray {
+        val buf = ByteBuffer.allocate(14 + (if (reply) 1 else 0) + data.size)
+        buf.put(op.toByte()).putInt(clipId)
+        if (reply) buf.put(status.toByte())
+        buf.putInt(offset).put(flags.toByte()).putInt(total).put(data)
+        return buf.array()
+    }
+
+    companion object {
+        const val PUT = 1
+        const val GET = 2
+        /** Put: paste once the clipboard is set. */
+        const val PASTE = 1
+        /** Get: copy what's selected first. */
+        const val COPY = 1
+        /** The text is a password or the like. */
+        const val SENSITIVE = 2
+
+        const val OK = 0
+        const val WORKING = 1
+        const val EMPTY = 2
+        const val TOO_LARGE = 3
+        const val FAILED = 4
+        const val UNKNOWN = 5
+
+        /** Longest text, in UTF-8 bytes. */
+        const val MAX_TEXT = 65536
+        /** Text bytes per packet. */
+        const val CHUNK = 1024
+
+        fun decode(b: ByteArray, reply: Boolean): Clip? = try {
+            val buf = ByteBuffer.wrap(b)
+            val op = buf.get().toInt() and 0xFF
+            val id = buf.int
+            val status = if (reply) buf.get().toInt() and 0xFF else OK
+            val offset = buf.int
+            val flags = buf.get().toInt() and 0xFF
+            val total = buf.int
+            val data = ByteArray(minOf(buf.remaining(), CHUNK)).also { buf.get(it) }
+            Clip(op, id, status, offset, flags, total, data)
+        } catch (e: RuntimeException) {
+            null
+        }
     }
 }
 

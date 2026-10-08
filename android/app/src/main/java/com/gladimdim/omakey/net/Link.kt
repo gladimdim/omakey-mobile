@@ -1,5 +1,6 @@
 package com.gladimdim.omakey.net
 
+import com.gladimdim.omakey.protocol.ClipTransfer
 import com.gladimdim.omakey.protocol.DesktopTheme
 
 /**
@@ -30,6 +31,9 @@ interface Link {
 
         /** The computer's Omarchy theme, when its omakeyd sends one. */
         fun onTheme(theme: DesktopTheme) {}
+
+        /** A clipboard transfer from [clip] ended. */
+        fun onClip(outcome: ClipTransfer.Outcome) {}
     }
 
     fun start()
@@ -39,6 +43,13 @@ interface Link {
 
     /** A key changed: get it to the computer now. Safe from any thread. */
     fun send()
+
+    /**
+     * Start a clipboard transfer with omakeyd, replacing any under way; its
+     * outcome comes to [Listener.onClip]. False when this connection has no
+     * clipboard ([com.gladimdim.omakey.protocol.Wire.FEATURE_CLIPBOARD]).
+     */
+    fun clip(transfer: ClipTransfer): Boolean = false
 
     /** WELCOME feature bits of the connection, e.g. [com.gladimdim.omakey.protocol.Wire.FEATURE_POINTER]. */
     val features: Int

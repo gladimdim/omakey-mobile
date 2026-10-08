@@ -4,6 +4,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import com.gladimdim.omakey.protocol.ClientSession
+import com.gladimdim.omakey.protocol.ClipTransfer
 import com.gladimdim.omakey.protocol.HostRecord
 import com.gladimdim.omakey.protocol.KeyState
 import com.gladimdim.omakey.protocol.Wire
@@ -100,6 +101,13 @@ class KeyboardLink(
         wake()
     }
 
+    override fun clip(transfer: ClipTransfer): Boolean {
+        if (features and Wire.FEATURE_CLIPBOARD == 0) return false
+        synchronized(session) { session.clip = transfer }
+        wake()
+        return true
+    }
+
     /** Wake the network thread. Cheap; safe from any thread. */
     fun wake() {
         selector?.wakeup()
@@ -187,13 +195,18 @@ class KeyboardLink(
                         setState(Link.State.CONNECTING)
                         continue
                     }
+                    var clipDone: ClipTransfer.Outcome? = null
                     timeout = synchronized(session) {
                         val since = now - lastSend
                         if (keys.version != sentVersion || (keys.hasUnacked && since >= resendMs) || since >= HEARTBEAT_MS) {
                             sendInput(ch, now)
                         }
-                        (if (keys.hasUnacked) resendMs else HEARTBEAT_MS) - (now() - lastSend)
+                        clipDone = session.clipExpired(now)
+                        session.clipPacket(now)?.let { send(ch, it) }
+                        val next = (if (keys.hasUnacked) resendMs else HEARTBEAT_MS) - (now() - lastSend)
+                        session.clip?.let { minOf(next, it.dueAt - now()) } ?: next
                     }
+                    clipDone?.let(listener::onClip)
                 }
 
                 sel.select(timeout.coerceIn(1, 1000))
@@ -229,6 +242,7 @@ class KeyboardLink(
                                 listener.onPing(r.pingMs)
                             }
                         }
+                        is ClientSession.Result.ClipDone -> listener.onClip(r.outcome)
                         // REJECT isn't authenticated: only believe one from where we
                         // sent HELLO, so a stranger can't slow our retries.
                         ClientSession.Result.Rejected -> if (from in candidates) setState(Link.State.REJECTED)

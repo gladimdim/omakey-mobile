@@ -93,4 +93,27 @@ class TestVectorsTest {
 
         assertEquals(v.getJSONObject("bye").getString("packet"), Hex.encode(client.byePacket()!!))
     }
+
+    @Test
+    fun clipPutAndReplyMatchByteForByte() {
+        val host = PairingUri.parse(v.getString("pair_uri"))
+        val hello = v.getJSONObject("hello")
+        val client = ClientSession(host, hello.getString("name"), KeyState(), FixedRandom(hex("client_random"), hex("nonce", hello)))
+        client.helloPacket()
+        val welcome = hex("packet", v.getJSONObject("welcome"))
+        val connected = client.receive(welcome, welcome.size, 0) as ClientSession.Result.Connected
+        // The vectors' WELCOME offers the touchpad only; the packets are the same either way.
+        assertEquals(0, connected.features and Wire.FEATURE_CLIPBOARD)
+
+        val put = v.getJSONObject("clip_put")
+        val t = ClipTransfer.put(put.getString("text"), paste = true, sensitive = false, id = put.getInt("clip_id"))!!
+        client.clip = t
+        assertEquals(put.getString("packet"), Hex.encode(client.clipPacket(0)!!))
+        // Not due again until the resend time.
+        assertEquals(null, client.clipPacket(10))
+
+        val reply = hex("packet", v.getJSONObject("clip_reply"))
+        assertEquals(ClientSession.Result.ClipDone(ClipTransfer.Outcome.Sent), client.receive(reply, reply.size, 20))
+        assertEquals(null, client.clip)
+    }
 }

@@ -4,7 +4,7 @@
  "id": "omakey-pro",
  "name": "Omakey Pro",
  "author": "Omakey",
- "description": "Column-based QWERTY split for two thumbs: letters on the outer edges with a space bar under each half, mirrored islands with big Ctrl, Backspace and Shift on both sides, a U-shaped Enter bridging the split, and a top row for rarely used keys.",
+ "description": "Column-based QWERTY split for two thumbs: letters on the outer edges with a space bar under each half, mirrored islands with big Ctrl, Backspace and Shift on both sides, a U-shaped Enter bridging the split with Copy and Paste inside it, and a top row for rarely used keys.",
  "width": 19.9,
  "height": 7.3,
  "splitAt": 9.95,
@@ -968,6 +968,26 @@
      "h": 2.3
     }
    ]
+  },
+  {
+   "id": "copy",
+   "x": 9.2,
+   "y": 4.05,
+   "w": 1.5,
+   "h": 1.15,
+   "label": "Copy",
+   "code": "KEY_COPY",
+   "style": "mod"
+  },
+  {
+   "id": "paste",
+   "x": 9.2,
+   "y": 5.2,
+   "w": 1.5,
+   "h": 1.15,
+   "label": "Paste",
+   "code": "KEY_PASTE",
+   "style": "mod"
   }
  ]
 }

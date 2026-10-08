@@ -10,6 +10,29 @@
     "packet": "4f4b010501020304050607080badcafe00000000000000059b01069d7d5d150987c77b62b3e3942c"
   },
   "client_random": "101112131415161718191a1b1c1d1e1f",
+  "clip_put": {
+    "body": "0101020304000000000100000006486920e29c93",
+    "clip_id": 16909060,
+    "counter": 1,
+    "flags": 1,
+    "note": "a session of its own, after the same WELCOME: counters start again",
+    "offset": 0,
+    "op": 1,
+    "packet": "4f4b010701020304050607080badcafe00000000000000017661ff7e4aeda094147d397205c159e6cef7434c1e558202a836c14a87bbbe60df15b3e1",
+    "text": "Hi ✓",
+    "total": 6
+  },
+  "clip_reply": {
+    "body": "010102030400000000060000000006",
+    "clip_id": 16909060,
+    "counter": 1,
+    "flags": 0,
+    "offset": 6,
+    "op": 1,
+    "packet": "4f4b010801020304050607080badcafe00000000000000011b389cd01336225161b18d226a9fdc83d784194cd5e6a5a184a44fa6dcc735",
+    "status": 0,
+    "total": 6
+  },
   "description": "Protocol v1 vectors. Hex unless noted. All packets are full datagrams.",
   "device_id": "0102030405060708",
   "device_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
