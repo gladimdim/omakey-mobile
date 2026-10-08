@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity() {
         ).apply { setPadding(0, 0, 0, dp(12f)) })
         btList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(btList)
-        col.addView(button("Pair over Bluetooth") { openWithBluetooth(KeyboardActivity.BT_NEW) })
+        col.addView(button("") { openWithBluetooth(KeyboardActivity.BT_NEW) }.apply { setBluetoothText("Pair over Bluetooth") })
 
         col.addView(section("LAYOUT"))
         layoutButton = button("") { pickLayout() }.apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
@@ -205,7 +205,8 @@ class MainActivity : ComponentActivity() {
                 else -> "○ Offline · $address"
             }
             val color = if (answered != null) Palette.OK else Palette.FG_DIM
-            pairedList.addView(card(h.name, detail, color, border = if (answered != null) Palette.OK else null).apply {
+            val viaBluetooth = answered == null && h.hostId in online && h.btAddress != null
+            pairedList.addView(card(h.name, detail, color, border = if (answered != null) Palette.OK else null, bluetooth = viaBluetooth).apply {
                 setOnClickListener { openKeyboard(h) }
                 setOnLongClickListener { confirmUnlink(h, hosts, ::render); true }
             })
@@ -225,7 +226,7 @@ class MainActivity : ComponentActivity() {
 
         btList.removeAllViews()
         for (b in btHosts.all()) {
-            btList.addView(card(b.name, "Bluetooth keyboard").apply {
+            btList.addView(card(b.name, "Bluetooth keyboard", bluetooth = true).apply {
                 setOnClickListener { openWithBluetooth(KeyboardActivity.BT_PREFIX + b.address) }
                 setOnLongClickListener { confirmUnlink(b, btHosts, ::render); true }
             })

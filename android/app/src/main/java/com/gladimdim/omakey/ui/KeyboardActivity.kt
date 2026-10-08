@@ -744,7 +744,10 @@ open class KeyboardActivity : Activity() {
                 h.id in nearbyIds -> "nearby"
                 else -> "not seen on this network"
             }
-            (if (current) "● " else "   ") + h.name + "  ·  " + detail
+            val label = h.name + "  ·  " + detail
+            val viaBluetooth = h is Target.Bluetooth || (current && link?.transport == "Bluetooth")
+            TextUtils.concat(if (current) "● " else "   ",
+                if (viaBluetooth) bluetooth(label, Palette.ACCENT, dp(16f).toFloat()) else label)
         }.toTypedArray()
 
         AlertDialog.Builder(this, Palette.dialogTheme)
@@ -985,7 +988,9 @@ open class KeyboardActivity : Activity() {
             Link.State.UNSUPPORTED ->
                 Triple("●", Palette.ERROR, "This phone can't be a Bluetooth keyboard (or Bluetooth is off)")
         }
-        status.text = "$dot  $msg"
+        // The phone as a Bluetooth keyboard, or omakeyd over its Bluetooth fallback.
+        val viaBluetooth = link is BluetoothHidLink || link?.transport == "Bluetooth"
+        status.text = TextUtils.concat("$dot  ", if (viaBluetooth) bluetooth(msg, color, status.textSize) else msg)
         status.setTextColor(color)
     }
 

@@ -6,6 +6,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.provider.Settings
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ImageSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -13,6 +16,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.gladimdim.omakey.R
 
 /** Small helpers for the code-built screens. */
 
@@ -81,13 +85,35 @@ internal fun Context.text(s: CharSequence, size: Float = 15f, color: Int = Palet
         typeface = if (bold) MONO_BOLD else MONO
     }
 
+/** [s] after the Bluetooth sign, which is [color] and [sizePx] tall: marks a Bluetooth connection. */
+internal fun Context.bluetooth(s: CharSequence, color: Int, sizePx: Float): CharSequence {
+    val icon = getDrawable(R.drawable.ic_bluetooth)!!.mutate().apply {
+        val size = (sizePx * 1.15f).toInt()
+        setBounds(0, 0, size, size)
+        setTint(color)
+    }
+    return SpannableStringBuilder("\uFFFC ").append(s).apply {
+        setSpan(ImageSpan(icon, ImageSpan.ALIGN_CENTER), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    }
+}
+
+/** Shows [s] after the Bluetooth sign, in the text's own colour and size. */
+internal fun TextView.setBluetoothText(s: CharSequence) {
+    text = context.bluetooth(s, currentTextColor, textSize)
+}
+
 internal fun Context.section(s: String) = text(s, 12f, Palette.FG_DIM, bold = true).apply {
     letterSpacing = 0.12f
     setPadding(0, dp(28f), 0, dp(10f))
 }
 
-/** A tappable card with a title and a detail line; [border] outlines it in that colour. */
-internal fun Context.card(title: String, detail: String, detailColor: Int = Palette.FG_DIM, border: Int? = null) =
+/**
+ * A tappable card with a title and a detail line; [border] outlines it in
+ * that colour, and [bluetooth] puts the Bluetooth sign before the detail.
+ */
+internal fun Context.card(
+    title: String, detail: String, detailColor: Int = Palette.FG_DIM, border: Int? = null, bluetooth: Boolean = false,
+) =
     LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = if (border != null) rounded(Palette.SURFACE, dp(10f).toFloat(), border, dp(1.5f))
@@ -96,7 +122,10 @@ internal fun Context.card(title: String, detail: String, detailColor: Int = Pale
         isClickable = true
         isFocusable = true
         addView(text(title, 16f, Palette.FG, bold = true))
-        addView(text(detail, 13f, detailColor).apply { setPadding(0, dp(4f), 0, 0) })
+        addView(text(detail, 13f, detailColor).apply {
+            setPadding(0, dp(4f), 0, 0)
+            if (bluetooth) setBluetoothText(detail)
+        })
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             .apply { bottomMargin = dp(8f) }
     }

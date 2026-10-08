@@ -178,18 +178,21 @@ class SettingsActivity : Activity() {
             list.addView(computerRow(h.name, via, h.addresses.first()) { confirmUnlink(h, hosts, ::render) })
         }
         for (b in bt) {
-            list.addView(computerRow(b.name, "Bluetooth keyboard", b.address) { confirmUnlink(b, btHosts, ::render) })
+            list.addView(computerRow(b.name, "Bluetooth keyboard", b.address, bluetooth = true) { confirmUnlink(b, btHosts, ::render) })
         }
     }
 
-    private fun computerRow(name: String, type: String, address: String, unlink: () -> Unit): View {
+    private fun computerRow(name: String, type: String, address: String, bluetooth: Boolean = false, unlink: () -> Unit): View {
         val texts = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(text(name, 16f, Palette.FG, bold = true).apply {
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
             })
-            addView(text(type, 13f, Palette.ACCENT).apply { setPadding(0, dp(4f), 0, 0) })
+            addView(text(type, 13f, Palette.ACCENT).apply {
+                setPadding(0, dp(4f), 0, 0)
+                if (bluetooth) setBluetoothText(type)
+            })
             addView(text(address, 12f, Palette.FG_DIM).apply { setPadding(0, dp(2f), 0, 0) })
         }
         return LinearLayout(this).apply {
