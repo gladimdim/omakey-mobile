@@ -78,7 +78,7 @@ class SettingsActivity : Activity() {
         list.addView(section("DEFAULT LAYOUT"))
         list.addView(card(
             "⌨  ${LayoutsActivity.currentName(layouts)}",
-            "Every keyboard opens with it. Switch any time with ⌨ Layout on the keyboard.",
+            "Every keyboard opens with it. Switch any time with ⌨ on the keyboard.",
         ).apply {
             setOnClickListener { startActivity(Intent(this@SettingsActivity, LayoutsActivity::class.java)) }
         })

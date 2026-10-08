@@ -32,7 +32,8 @@ import kotlin.math.hypot
  *   multi-select and Shift-click range select work with the other thumb
  *   moving the pointer.
  * - A strip along the bottom holds the pointer speed: a preset chip and a
- *   slider. Swiping up from the rest of the strip, from the grab bar at the
+ *   slider. In portrait mode it is a row inside the bottom of the surface
+ *   instead, so the buttons and scroll strips run the full height. Swiping up from the rest of the strip, from the grab bar at the
  *   very bottom (or tapping it), or from a side button puts the touchpad
  *   away. Side buttons press a moment late for that, so a swipe never clicks.
  */
@@ -61,7 +62,7 @@ class TouchpadView(context: Context) : View(context) {
     /**
      * Portrait mode, under the phone's own keyboard: Ctrl and Shift buttons
      * instead of Ctrl + Left and Shift + Left, slimmer columns, and the speed
-     * strip across the whole width. Set before the view is laid out.
+     * in a row along the bottom of the surface. Set before the view is laid out.
      */
     var compact = false
         set(value) {
@@ -162,7 +163,9 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     // Geometry.
+    /** Where the pointer moves; in portrait mode the speed row is under it, on the same [surface]. */
     private val pad = RectF()
+    private val surface = RectF()
     /** The scroll strips, left and right, and their slightly wider touch areas. */
     private val scrollers = arrayOf(RectF(), RectF())
     private val scrollTouch = arrayOf(RectF(), RectF())
@@ -260,8 +263,8 @@ class TouchpadView(context: Context) : View(context) {
         val bottom = h - grabH - gap * 2 - stripH
         grab.set(0f, h - grabH, w.toFloat(), h.toFloat())
 
-        // Side columns, mirrored: full height, or above the speed strip in portrait.
-        val columnBottom = if (compact) bottom else h - grabH - gap
+        // Side columns, mirrored, full height.
+        val columnBottom = h - grabH - gap
         for ((column, left) in listOf(leftColumn to gap, rightColumn to w - gap - columnW)) {
             val cellH = (columnBottom - gap - gap * (column.size - 1)) / column.size
             column.forEachIndexed { i, b ->
@@ -271,22 +274,30 @@ class TouchpadView(context: Context) : View(context) {
         }
         // Scroll strips a quarter of a button column wide, then the surface between them.
         val scrollW = columnW * 0.25f
-        scrollers[0].set(gap * 2 + columnW, gap, gap * 2 + columnW + scrollW, bottom)
-        scrollers[1].set(w - gap * 2 - columnW - scrollW, gap, w - gap * 2 - columnW, bottom)
+        val scrollBottom = if (compact) columnBottom else bottom
+        scrollers[0].set(gap * 2 + columnW, gap, gap * 2 + columnW + scrollW, scrollBottom)
+        scrollers[1].set(w - gap * 2 - columnW - scrollW, gap, w - gap * 2 - columnW, scrollBottom)
         for (i in 0..1) scrollTouch[i].set(scrollers[i].left - gap, scrollers[i].top, scrollers[i].right + gap, scrollers[i].bottom)
-        pad.set(scrollers[0].right + gap, gap, scrollers[1].left - gap, bottom)
-        strip.set(if (compact) gap else scrollers[0].left, pad.bottom + gap, if (compact) w - gap else scrollers[1].right, h - grabH - gap)
-        val chipH = 28 * density
-        val sliderH = 22 * density
+        surface.set(scrollers[0].right + gap, gap, scrollers[1].left - gap, scrollBottom)
+        pad.set(surface)
         if (compact) {
-            // The chip at the start, the slider filling the rest.
+            // The speed row along the bottom of the surface: the chip at the start, the slider filling the rest.
+            strip.set(surface.left, surface.bottom - SPEED_ROW_DP * density, surface.right, surface.bottom)
+            pad.bottom = strip.top
+            val chipH = 26 * density
+            val sliderH = 18 * density
             textPaint.textSize = 12 * density
-            val chipW = textPaint.measureText(chipLabel()) + 28 * density
-            chip.set(strip.left + 9 * density, strip.centerY() - chipH / 2, strip.left + 9 * density + chipW, strip.centerY() + chipH / 2)
-            slider.set(chip.right + 18 * density, strip.centerY() - sliderH / 2, strip.right - 18 * density, strip.centerY() + sliderH / 2)
+            // Room for the widest speed, so the chip keeps its size as it changes.
+            shortChip = textPaint.measureText("Speed 0.00× ▾") + 24 * density > strip.width() * 0.5f
+            val chipW = textPaint.measureText(if (shortChip) "0.00× ▾" else "Speed 0.00× ▾") + 24 * density
+            chip.set(strip.left + 8 * density, strip.centerY() - chipH / 2, strip.left + 8 * density + chipW, strip.centerY() + chipH / 2)
+            slider.set(chip.right + 14 * density, strip.centerY() - sliderH / 2, strip.right - 14 * density, strip.centerY() + sliderH / 2)
             sliderTouch.set(slider.left - 10 * density, strip.top, strip.right, strip.bottom)
             return
         }
+        strip.set(scrollers[0].left, pad.bottom + gap, scrollers[1].right, h - grabH - gap)
+        val chipH = 28 * density
+        val sliderH = 22 * density
 
         // Speed in the strip: the preset chip, then the slider, centred together.
         val chipW = minOf(strip.width() * if (compact) 0.4f else 0.32f, 230 * density)
@@ -658,7 +669,7 @@ class TouchpadView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         val radius = 14 * density
-        canvas.drawRoundRect(pad, radius, radius, surfacePaint)
+        canvas.drawRoundRect(surface, radius, radius, surfacePaint)
         // A faint dot grid, so the surface reads as a touchpad.
         val step = 22 * density
         val dot = 1.4f * density
@@ -733,8 +744,14 @@ class TouchpadView(context: Context) : View(context) {
     }
 
     private fun drawSpeed(canvas: Canvas) {
-        fillPaint.color = Palette.SURFACE
-        canvas.drawRoundRect(strip, strip.height() / 2, strip.height() / 2, fillPaint)
+        if (compact) {
+            // A hairline between the pointer surface and the speed row on it.
+            fillPaint.color = Palette.KEY
+            canvas.drawRect(strip.left + 12 * density, strip.top, strip.right - 12 * density, strip.top + density, fillPaint)
+        } else {
+            fillPaint.color = Palette.SURFACE
+            canvas.drawRoundRect(strip, strip.height() / 2, strip.height() / 2, fillPaint)
+        }
         val r = slider
         val h = r.height()
         val t = posOf(sensitivity)
@@ -783,10 +800,17 @@ class TouchpadView(context: Context) : View(context) {
         }
     }
 
+    /** Portrait mode on a narrow surface: the chip shows just the number. */
+    private var shortChip = false
+
     /** The preset and speed; just the speed when narrow. */
     private fun chipLabel(): String {
         val value = "%.2f".format(sensitivity).trimEnd('0').trimEnd('.')
-        return if (compact) "Speed $value× ▾" else "${presetName.ifEmpty { "Pointer speed" }} · $value× ▾"
+        return when {
+            !compact -> "${presetName.ifEmpty { "Pointer speed" }} · $value× ▾"
+            shortChip -> "$value× ▾"
+            else -> "Speed $value× ▾"
+        }
     }
 
     private fun drawButton(canvas: Canvas, b: Button, radius: Float) {
@@ -875,6 +899,8 @@ class TouchpadView(context: Context) : View(context) {
         /** How long a side button waits before pressing, so a swipe up from it never clicks. */
         const val BUTTON_DELAY_MS = 120L
         const val GRAB_DP = 22f
+        /** Portrait mode: the speed row's height at the bottom of the surface. */
+        const val SPEED_ROW_DP = 40f
         const val BUTTON = 10 // BUTTON + index into buttons
         const val TAP_MS = 220L
         const val MULTI_TAP_MS = 300L

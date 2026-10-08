@@ -109,7 +109,7 @@ imports a `.json` file; `omakey://layout?d=…` links, files opened from a file
 manager and layouts shared from other apps are imported too, after a preview
 that says when it would replace an imported layout with the same id.
 
-**⇧ Sticky** in the keyboard's top bar turns on sticky keys: tap Shift,
+**⇧** in the keyboard's top bar turns on sticky keys: tap Shift,
 Ctrl, Alt or Super and it stays down for the next key (tap twice to lock it,
 once more to let go); tap Fn and the next key uses the Fn layer. Held in a
 chord, they work as usual. The keyboard follows the computer's Caps Lock

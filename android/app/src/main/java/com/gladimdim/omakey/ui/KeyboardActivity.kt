@@ -96,8 +96,8 @@ open class KeyboardActivity : Activity() {
     /** Portrait mode: what the phone's keyboard types into, and its paced sender. */
     private var ime: ImeCapture? = null
     private var typist: Typist? = null
-    /** Portrait mode: digits, F-keys, navigation and system keys above the phone's keyboard. */
-    private var keyStrip: KeyStrip? = null
+    /** Portrait mode: two rows of digits, F-keys, navigation and system keys above the phone's keyboard, each paged on its own. */
+    private var keyStrips: List<KeyStrip> = emptyList()
     private lateinit var status: TextView
     private lateinit var stage: FrameLayout
     private lateinit var panel: FrameLayout
@@ -148,7 +148,7 @@ open class KeyboardActivity : Activity() {
             // A key went out: Ctrl or Shift latched on the touchpad, Super or Alt on the key strip, were for it.
             if (code !in UsKeys.MODIFIERS) {
                 touchpad.modifiersUsed()
-                keyStrip?.modifiersUsed()
+                keyStrips.forEach { it.modifiersUsed() }
             }
         }
     }
@@ -159,7 +159,7 @@ open class KeyboardActivity : Activity() {
             // Ctrl and Shift from the touchpad show in the typed text's shortcuts.
             if (code in UsKeys.MODIFIERS) if (down) typed?.keyDown(code) else typed?.keyUp(code)
             // A click let go: Super or Alt latched on the key strip was for it (Super + drag moves a window).
-            if (!down && code in Wire.BTN_LEFT..Wire.BTN_MIDDLE) keyStrip?.modifiersUsed()
+            if (!down && code in Wire.BTN_LEFT..Wire.BTN_MIDDLE) keyStrips.forEach { it.modifiersUsed() }
         }
 
         override fun motion(dx: Float, dy: Float) {
@@ -233,11 +233,12 @@ open class KeyboardActivity : Activity() {
             // Sticky keys are for the app's own keys.
             addView(barButton("") { toggleSticky() }.also {
                 stickyButton = it
+                it.contentDescription = "Sticky keys"
                 if (portrait) it.visibility = View.GONE
             })
-            addView(barButton("⇄ PC") { pickHost() })
-            addView(barButton("⌨ Layout") { pickLayout() })
-            addView(barButton("✕") { finish() })
+            addView(barButton("⇄") { pickHost() }.apply { contentDescription = "Switch computer" })
+            addView(barButton("⌨") { pickLayout() }.apply { contentDescription = "Switch layout" })
+            addView(barButton("✕") { finish() }.apply { contentDescription = "Close" })
         }
         val haptics = Haptics(this).apply { enabled = AppSettings(this@KeyboardActivity).haptics }
         keyboard = KeyboardView(this).apply {
@@ -431,11 +432,14 @@ open class KeyboardActivity : Activity() {
                     setPadding(dp(12f), dp(8f), dp(12f), dp(12f))
                     addView(reopen, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
                 }
-                keyStrip = KeyStrip(this@KeyboardActivity, typist!!, sink).also { strip ->
-                    strip.haptics = haptics
-                    strip.page = prefs.getInt("stripPage", 0)
-                    strip.onPageChanged = { prefs.edit().putInt("stripPage", it).apply() }
-                    addView(strip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52f)))
+                // Two strips, swiped separately: the upper one starts on navigation, the lower on digits.
+                keyStrips = listOf("stripPage2" to 2, "stripPage" to 0).map { (key, first) ->
+                    KeyStrip(this@KeyboardActivity, typist!!, sink).also { strip ->
+                        strip.haptics = haptics
+                        strip.page = prefs.getInt(key, first)
+                        strip.onPageChanged = { prefs.edit().putInt(key, it).apply() }
+                        addView(strip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52f)))
+                    }
                 }
                 var keyboardHeight = (resources.displayMetrics.heightPixels * 0.38f).toInt()
                 addView(reopenArea, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, keyboardHeight))
@@ -481,7 +485,7 @@ open class KeyboardActivity : Activity() {
     }
 
     private fun renderSticky() {
-        stickyButton.text = if (keyboard.sticky) "⇧ Sticky ●" else "⇧ Sticky"
+        stickyButton.text = "⇧"
         stickyButton.setTextColor(if (keyboard.sticky) Palette.ACCENT else Palette.FG_DIM)
     }
 
@@ -718,7 +722,7 @@ open class KeyboardActivity : Activity() {
 
     override fun onPause() {
         typist?.clear()
-        keyStrip?.reset()
+        keyStrips.forEach { it.reset() }
         // Never leave a key held on the computer while we're not looking.
         keyboard.releaseAll()
         touchpad.releaseAll()
