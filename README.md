@@ -16,8 +16,9 @@ It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey
 
 Two ways to connect:
 
-- **omakeyd** (Omarchy): pair with the QR code. Wi-Fi first, with a
-  Bluetooth fallback when Wi-Fi can't reach the computer.
+- **omakeyd** (Omarchy, or a Steam Deck with SteamOS): pair with the QR
+  code. Wi-Fi first, with a Bluetooth fallback when Wi-Fi can't reach the
+  computer.
 - **Bluetooth keyboard** (any computer, tablet or TV): the phone becomes a
   standard Bluetooth HID keyboard and touchpad, paired in the computer's own
   Bluetooth settings. Needs a phone that offers the HID Device profile; some

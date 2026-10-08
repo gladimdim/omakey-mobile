@@ -53,6 +53,9 @@ class ClipboardBridge(
     /** The text a put is sending, until it's in. */
     private var sending: String? = null
 
+    /** Said once that the computer's clipboard is out of reach (SteamOS's Game Mode). */
+    private var saidUnreachable = false
+
     fun copy() {
         if (link()?.clip(ClipTransfer.get(copy = true)) != true) shortcut(KEY_LEFTCTRL, KEY_INSERT)
     }
@@ -91,12 +94,21 @@ class ClipboardBridge(
                 if (Build.VERSION.SDK_INT < 33) toast("Copied from ${hostName()}")
             }
             is ClipTransfer.Outcome.Failed -> {
+                val pasting = sending != null
                 sending = null
+                // No clipboard to reach on the computer: a paste is its own
+                // Shift+Insert, and a copy was already pressed there.
+                if (outcome.status == Clip.FAILED) {
+                    if (pasting) return shortcut(KEY_LEFTSHIFT, KEY_INSERT)
+                    if (saidUnreachable) return
+                    saidUnreachable = true
+                    return toast("Copied on ${hostName()}, but its clipboard can't reach the phone here")
+                }
                 toast(when (outcome.status) {
                     Clip.EMPTY -> "Nothing to copy: ${hostName()}'s clipboard has no text"
                     Clip.TOO_LARGE -> "The copied text is too large for the phone (over 64 KB)"
                     ClipTransfer.GAVE_UP -> "${hostName()} didn't answer"
-                    else -> "${hostName()} couldn't reach its clipboard"
+                    else -> "${hostName()} couldn't use its clipboard"
                 })
             }
         }
