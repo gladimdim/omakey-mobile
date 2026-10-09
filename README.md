@@ -46,7 +46,7 @@ It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey
 
 | Directory  | Status |
 |------------|--------|
-| `android/` | Working: pairing, discovery, Classic QWERTY, layout import |
+| `android/` | Released ([1.3.0](https://github.com/gladimdim/omakey-mobile/releases/latest)): QR pairing and discovery, Wi-Fi with Bluetooth fallback, Bluetooth keyboard mode, ten layouts and layout import, touchpad, portrait mode, shared clipboard |
 | `ios/`     | Planned (M3): SwiftUI + UIView keyboard, Network.framework, CryptoKit |
 
 Two ways to connect:
