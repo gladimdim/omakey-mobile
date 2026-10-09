@@ -180,6 +180,24 @@ handle or press Back to return):
 It needs omakeyd 0.3 or newer on the computer (the bar widget offers the
 update); with an older one the touchpad says so.
 
+## Portrait mode
+
+Choose **Portrait** under Layout and the phone stands up: the touchpad on
+top, your own Android keyboard below, and two rows of the keys phones lack
+between them:
+
+- the lower row swipes sideways through pages: digits, F1–F12, Esc, Tab,
+  Home, End and arrows, then Super, Ctrl, Alt, Shift, Print Screen and
+  media keys
+- the upper row holds the keys you choose, in ten slots that stay put. Tap
+  the pencil at its right end and the keys tremble: drag a key up from the
+  pages into a slot (or tap it for the first empty one), drag one along the
+  row to move it, tap one or drag it off the row to clear its slot. Tap the
+  tick when done
+
+In both rows a tap types, a held key repeats, and Super, Ctrl, Alt and
+Shift can be held while you type or tapped to stay down for the next key.
+
 ## iOS (planned)
 
 Same protocol and layouts: SwiftUI shell, a `UIView` keyboard using
