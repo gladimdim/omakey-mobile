@@ -9,6 +9,41 @@ Bluetooth keyboard.
 **Download:** the signed APK is on the [releases page](https://github.com/gladimdim/omakey-mobile/releases/latest).
 It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey-omarchy-plugin/>.
 
+<p align="center">
+  <img src="preview.png" alt="Omakey: the phone holds SUPER + SPACE and the Omarchy menu opens; layouts, touchpad, portrait mode, QR pairing and Bluetooth" width="900">
+</p>
+
+## Features
+
+- **A real keyboard, not a text box.** Hold `SUPER + SPACE`, Esc, F1–F12,
+  arrows, media keys or any chord with as many fingers as you like. Hyprland
+  binds, games and the lock screen see real key presses, and your desktop's
+  keyboard layout applies.
+- **Ten layouts, or your own.** Laptop QWERTY, Colemak and Dvorak, the
+  thumb-friendly Omakey Pro, and split boards (Corne, Lily58, Ferris Sweep,
+  ErgoDox, Alice, Kinesis Advantage) whose halves hug each edge of the
+  screen. Design yours in [Omakey Layout Studio](https://gladimdim.github.io/omakey-layout-studio/)
+  and send it as a link, a QR code or a JSON file.
+- **Touchpad.** Pull it down to move the mouse, click, right-click and
+  scroll, with speed presets from a laptop screen to 4K.
+- **Portrait mode.** Hold the phone upright and type with your own Android
+  keyboard: autocorrect and swipe typing arrive as key presses, with a row of
+  F-keys, arrows and modifiers above it that you arrange yourself.
+- **Pair with a QR code** from the Omarchy bar widget; after that the phone
+  finds the desktop by itself.
+- **Wi-Fi first, Bluetooth always.** Falls back to Bluetooth when Wi-Fi
+  can't reach the computer, or becomes a plain Bluetooth keyboard and
+  touchpad for a Mac, PC, iPad or TV.
+- **Fast and private.** One encrypted packet per key (AES-256-GCM, a key
+  per phone), a few milliseconds on home Wi-Fi, and no stuck keys: every
+  packet carries every held key.
+- **Shared clipboard and lock lights.** Copy and paste between the phone
+  and the desktop; Caps, Num and Scroll Lock show on the phone.
+
+<p align="center">
+  <img src="artwork/layouts.png" alt="The ten built-in layouts: Classic QWERTY, Omakey Pro, Classic Colemak, Classic Dvorak, Corne, Lily58, Ferris Sweep, ErgoDox, Alice and Kinesis Advantage" width="900">
+</p>
+
 | Directory  | Status |
 |------------|--------|
 | `android/` | Working: pairing, discovery, Classic QWERTY, layout import |
