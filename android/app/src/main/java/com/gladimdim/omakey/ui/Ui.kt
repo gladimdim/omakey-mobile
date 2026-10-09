@@ -20,6 +20,12 @@ import com.gladimdim.omakey.R
 
 /** Small helpers for the code-built screens. */
 
+/**
+ * Bluetooth (the fallback to omakeyd and the Bluetooth keyboard mode) is off
+ * for now: Wi-Fi only. The code stays; this hides it from every screen.
+ */
+internal const val BLUETOOTH = false
+
 /** The phone's name as the user set it, for omakeyd and Bluetooth pairing. */
 internal fun Context.phoneName(): String =
     Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() }

@@ -4,13 +4,13 @@ Phone apps that turn your phone into a real keyboard for an
 [Omarchy](https://omarchy.org/) desktop. Every touch becomes a key press on a
 kernel-level virtual keyboard made by `omakeyd`, so Hyprland binds,
 `SUPER + SPACE`, F-keys, Esc and the lock screen all work as they do with a
-Bluetooth keyboard.
+USB keyboard.
 
 **Download:** the signed APK is on the [releases page](https://github.com/gladimdim/omakey-mobile/releases/latest).
 It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey-omarchy-plugin/>.
 
 <p align="center">
-  <img src="preview.png" alt="Omakey: the phone holds SUPER + SPACE and the Omarchy menu opens; layouts, touchpad, portrait mode, QR pairing and Bluetooth" width="900">
+  <img src="preview.png" alt="Omakey: the phone holds SUPER + SPACE and the Omarchy menu opens; layouts, touchpad, portrait mode and QR pairing" width="900">
 </p>
 
 ## Features
@@ -31,9 +31,6 @@ It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey
   F-keys, arrows and modifiers above it that you arrange yourself.
 - **Pair with a QR code** from the Omarchy bar widget; after that the phone
   finds the desktop by itself.
-- **Wi-Fi first, Bluetooth always.** Falls back to Bluetooth when Wi-Fi
-  can't reach the computer, or becomes a plain Bluetooth keyboard and
-  touchpad for a Mac, PC, iPad or TV.
 - **Fast and private.** One encrypted packet per key (AES-256-GCM, a key
   per phone), a few milliseconds on home Wi-Fi, and no stuck keys: every
   packet carries every held key.
@@ -46,18 +43,11 @@ It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey
 
 | Directory  | Status |
 |------------|--------|
-| `android/` | Released ([1.3.0](https://github.com/gladimdim/omakey-mobile/releases/latest)): QR pairing and discovery, Wi-Fi with Bluetooth fallback, Bluetooth keyboard mode, ten layouts and layout import, touchpad, portrait mode, shared clipboard |
+| `android/` | Released ([1.3.0](https://github.com/gladimdim/omakey-mobile/releases/latest)): QR pairing and discovery over Wi-Fi, ten layouts and layout import, touchpad, portrait mode, shared clipboard |
 | `ios/`     | Planned (M3): SwiftUI + UIView keyboard, Network.framework, CryptoKit |
 
-Two ways to connect:
-
-- **omakeyd** (Omarchy, or a Steam Deck with SteamOS): pair with the QR
-  code. Wi-Fi first, with a Bluetooth fallback when Wi-Fi can't reach the
-  computer.
-- **Bluetooth keyboard** (any computer, tablet or TV): the phone becomes a
-  standard Bluetooth HID keyboard and touchpad, paired in the computer's own
-  Bluetooth settings. Needs a phone that offers the HID Device profile; some
-  makers turn it off.
+It connects to **omakeyd** (Omarchy, or a Steam Deck with SteamOS) over
+Wi-Fi: pair with the QR code.
 
 The desktop side lives in `omakey-omarchy-plugin` and the layout editor in
 `omakey-layout-studio`. The wire protocol is specified in
@@ -149,7 +139,7 @@ that says when it would replace an imported layout with the same id.
 Ctrl, Alt or Super and it stays down for the next key (tap twice to lock it,
 once more to let go); tap Fn and the next key uses the Fn layer. Held in a
 chord, they work as usual. The keyboard follows the computer's Caps Lock
-light where it reports one (omakeyd 0.4+, or Bluetooth keyboard mode).
+light where it reports one (omakeyd 0.4+).
 
 **Copy** and **Paste** (in portrait mode's top bar, and as keys in layouts
 such as Omakey Pro) copy what's selected on the computer and paste there.
@@ -167,9 +157,6 @@ copy and paste (Ctrl+Insert, Shift+Insert).
   send), then wakes the network thread, which resends until ACKed (after
   1.5 × the measured ping + 2 ms, 5–20 ms) and heartbeats every 100 ms.
   Packets are marked DSCP EF so Wi-Fi WMM queues them as voice traffic.
-- Over Bluetooth a stream write can block, so the touch thread only wakes
-  the link's writer thread, which sends the newest state (a burst of
-  touchpad moves becomes one packet).
 - The touchpad asks for unbuffered touch dispatch, so moves aren't held
   for the next frame and resampled.
 - While the keyboard is visible the app holds a

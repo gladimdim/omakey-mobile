@@ -168,13 +168,13 @@ class SettingsActivity : Activity() {
 
     private fun renderComputers() {
         val paired = hosts.all()
-        val bt = btHosts.all()
+        val bt = if (BLUETOOTH) btHosts.all() else emptyList()
         if (paired.isEmpty() && bt.isEmpty()) {
             list.addView(text("No computers yet. Pair one from the main screen.", 14f, Palette.FG_DIM))
             return
         }
         for (h in paired) {
-            val via = if (h.btAddress != null) "Omakey · Wi-Fi + Bluetooth" else "Omakey · Wi-Fi"
+            val via = if (BLUETOOTH && h.btAddress != null) "Omakey · Wi-Fi + Bluetooth" else "Omakey · Wi-Fi"
             list.addView(computerRow(h.name, via, h.addresses.first()) { confirmUnlink(h, hosts, ::render) })
         }
         for (b in bt) {

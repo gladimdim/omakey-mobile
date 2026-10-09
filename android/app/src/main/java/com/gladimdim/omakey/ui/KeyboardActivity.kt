@@ -3,7 +3,6 @@ package com.gladimdim.omakey.ui
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
-import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
@@ -543,6 +542,7 @@ open class KeyboardActivity : Activity() {
     }
 
     private fun resolve(id: String): Target? = when {
+        id.startsWith(BT_PREFIX) && !BLUETOOTH -> null
         id == BT_NEW -> Target.Bluetooth(null, "a new computer")
         id.startsWith(BT_PREFIX) -> btHosts.get(id.removePrefix(BT_PREFIX))?.let { Target.Bluetooth(it.address, it.name) }
         else -> hosts.get(id)?.let { Target.Omakey(it) }
@@ -560,15 +560,15 @@ open class KeyboardActivity : Activity() {
         }.also { it.start() }
     }
 
-    private fun bluetoothGranted(): Boolean =
-        Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    private fun bluetoothGranted(): Boolean = BLUETOOTH && (
+        Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
 
     /** Start a connection to [target]. Callbacks from a replaced link are ignored. */
     private fun connect() {
         val t = target
         if (t is Target.Bluetooth && !bluetoothGranted()) {
             // Connected from onRequestPermissionsResult instead.
-            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE), REQ_BLUETOOTH)
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BLUETOOTH)
             return
         }
         // Back within a few seconds: the Bluetooth keyboard is still connected.
@@ -641,7 +641,6 @@ open class KeyboardActivity : Activity() {
         link = l
         l.start()
         routeCandidates()
-        if (t is Target.Bluetooth && t.address == null) requestDiscoverable()
     }
 
     /**
@@ -649,7 +648,7 @@ open class KeyboardActivity : Activity() {
      * computer, if the permission isn't there yet.
      */
     private fun askForBluetoothFallback(hostId: String) {
-        if (bluetoothGranted() || prefs.getBoolean("btAsked:$hostId", false)) return
+        if (!BLUETOOTH || bluetoothGranted() || prefs.getBoolean("btAsked:$hostId", false)) return
         prefs.edit().putBoolean("btAsked:$hostId", true).apply()
         requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BLUETOOTH_FALLBACK)
     }
@@ -666,16 +665,6 @@ open class KeyboardActivity : Activity() {
         } else {
             Toast.makeText(this, "Omakey needs the Nearby devices permission to be a Bluetooth keyboard", Toast.LENGTH_LONG).show()
             finish()
-        }
-    }
-
-    /** Pairing a new computer: it has to see the phone first. */
-    private fun requestDiscoverable() {
-        try {
-            startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
-                .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180))
-        } catch (e: Exception) {
-            // No permission or no Bluetooth: the status pill says what's wrong.
         }
     }
 
@@ -732,7 +721,7 @@ open class KeyboardActivity : Activity() {
 
     private fun pickHost() {
         val all: List<Target> = hosts.all().map { Target.Omakey(it) } +
-            btHosts.all().map { Target.Bluetooth(it.address, it.name) }
+            (if (BLUETOOTH) btHosts.all() else emptyList()).map { Target.Bluetooth(it.address, it.name) }
         val nearbyIds = nearby.mapNotNull { it.hostId }.toSet()
         val labels = all.map { h ->
             val current = h.id == target.id

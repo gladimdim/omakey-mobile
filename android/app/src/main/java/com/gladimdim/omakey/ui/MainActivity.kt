@@ -1,7 +1,11 @@
 package com.gladimdim.omakey.ui
 
 import android.Manifest
+import android.app.Activity
 import android.app.AlertDialog
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -60,17 +64,36 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * The keyboard to open once the permission dialog is answered. Kept in
-     * the saved state: the activity may be recreated while the dialog shows.
+     * The keyboard to open once the permission or Bluetooth dialog is
+     * answered. Kept in the saved state: the activity may be recreated while
+     * the dialog shows.
      */
     private var pendingOpen: String? = null
     /** Whether [pendingOpen] can't work without Bluetooth (a Bluetooth keyboard, not the fallback). */
     private var pendingNeedsBluetooth = false
     private val bluetoothPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         val target = pendingOpen ?: return@registerForActivityResult
+        when {
+            !pendingNeedsBluetooth -> { pendingOpen = null; openKeyboard(target) }
+            bluetoothGranted(target) -> openWithBluetooth(target)
+            else -> { pendingOpen = null; toast("Bluetooth needs the Nearby devices permission") }
+        }
+    }
+
+    /**
+     * The system's "make visible" or "turn on Bluetooth" dialog. Asked here,
+     * before the keyboard opens: the keyboard turns the screen to landscape,
+     * and the rotation closes a dialog shown over it.
+     */
+    private val bluetoothReady = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val target = pendingOpen ?: return@registerForActivityResult
         pendingOpen = null
-        if (bluetoothGranted() || !pendingNeedsBluetooth) openKeyboard(target)
-        else toast("Bluetooth needs the Nearby devices permission")
+        // Making the phone visible answers with the seconds it stays visible, not RESULT_OK.
+        when {
+            result.resultCode != Activity.RESULT_CANCELED -> openKeyboard(target)
+            target == KeyboardActivity.BT_NEW -> toast("The computer can only find the phone while it's visible")
+            else -> toast("Bluetooth is off")
+        }
     }
 
     private val openFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -161,14 +184,16 @@ class MainActivity : ComponentActivity() {
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         col.addView(row)
 
-        col.addView(section("BLUETOOTH KEYBOARD"))
-        col.addView(text(
-            "Any computer, tablet or TV, no omakeyd needed: the phone becomes a Bluetooth keyboard and touchpad.",
-            13f, Palette.FG_DIM,
-        ).apply { setPadding(0, 0, 0, dp(12f)) })
         btList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(btList)
-        col.addView(button("") { openWithBluetooth(KeyboardActivity.BT_NEW) }.apply { setBluetoothText("Pair over Bluetooth") })
+        if (BLUETOOTH) {
+            col.addView(section("BLUETOOTH KEYBOARD"))
+            col.addView(text(
+                "Any computer, tablet or TV, no omakeyd needed: the phone becomes a Bluetooth keyboard and touchpad.",
+                13f, Palette.FG_DIM,
+            ).apply { setPadding(0, 0, 0, dp(12f)) })
+            col.addView(btList)
+            col.addView(button("") { openWithBluetooth(KeyboardActivity.BT_NEW) }.apply { setBluetoothText("Pair over Bluetooth") })
+        }
 
         col.addView(section("LAYOUT"))
         layoutButton = button("") { pickLayout() }.apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
@@ -201,11 +226,11 @@ class MainActivity : ComponentActivity() {
             val detail = when {
                 answered != null -> "● Online · $address"
                 h.hostId !in online -> "Checking… · $address"
-                h.btAddress != null -> "○ Not on this Wi-Fi · will try Bluetooth"
+                BLUETOOTH && h.btAddress != null -> "○ Not on this Wi-Fi · will try Bluetooth"
                 else -> "○ Offline · $address"
             }
             val color = if (answered != null) Palette.OK else Palette.FG_DIM
-            val viaBluetooth = answered == null && h.hostId in online && h.btAddress != null
+            val viaBluetooth = BLUETOOTH && answered == null && h.hostId in online && h.btAddress != null
             pairedList.addView(card(h.name, detail, color, border = if (answered != null) Palette.OK else null, bluetooth = viaBluetooth).apply {
                 setOnClickListener { openKeyboard(h) }
                 setOnLongClickListener { confirmUnlink(h, hosts, ::render); true }
@@ -225,7 +250,7 @@ class MainActivity : ComponentActivity() {
         }
 
         btList.removeAllViews()
-        for (b in btHosts.all()) {
+        for (b in if (BLUETOOTH) btHosts.all() else emptyList()) {
             btList.addView(card(b.name, "Bluetooth keyboard", bluetooth = true).apply {
                 setOnClickListener { openWithBluetooth(KeyboardActivity.BT_PREFIX + b.address) }
                 setOnLongClickListener { confirmUnlink(b, btHosts, ::render); true }
@@ -262,15 +287,45 @@ class MainActivity : ComponentActivity() {
         startActivity(KeyboardActivity.intent(this, target, layouts))
     }
 
-    private fun bluetoothGranted(): Boolean =
-        Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    /** Connecting needs BLUETOOTH_CONNECT; making the phone visible for a new computer also BLUETOOTH_ADVERTISE. */
+    private fun bluetoothPermissions(target: String?): Array<String> = when {
+        Build.VERSION.SDK_INT < 31 -> emptyArray()
+        target == KeyboardActivity.BT_NEW -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE)
+        else -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
+    }
 
-    /** Open a Bluetooth keyboard, asking for the Nearby devices permission (Android 12+) first if needed. */
+    private fun bluetoothGranted(target: String? = null): Boolean =
+        bluetoothPermissions(target).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    /**
+     * Open a Bluetooth keyboard once everything it needs is there: the Nearby
+     * devices permission (Android 12+), then Bluetooth on, and for a new
+     * computer the phone visible to it. Each missing piece is asked for here,
+     * and the keyboard opens only when all were given.
+     */
     private fun openWithBluetooth(target: String) {
-        if (bluetoothGranted()) return openKeyboard(target)
         pendingOpen = target
         pendingNeedsBluetooth = true
-        bluetoothPermission.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE))
+        if (!bluetoothGranted(target)) return bluetoothPermission.launch(bluetoothPermissions(target))
+        val adapter = (getSystemService(BLUETOOTH_SERVICE) as BluetoothManager?)?.adapter
+        val ask = when {
+            // No Bluetooth at all: the keyboard's status says so.
+            adapter == null -> null
+            // Also turns Bluetooth on if it's off.
+            target == KeyboardActivity.BT_NEW -> Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180)
+            !adapter.isEnabled -> Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            else -> null
+        }
+        if (ask != null) {
+            try {
+                return bluetoothReady.launch(ask)
+            } catch (e: ActivityNotFoundException) {
+                // No system dialog for it: open the keyboard and let its status say what's wrong.
+            }
+        }
+        pendingOpen = null
+        openKeyboard(target)
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -338,7 +393,7 @@ class MainActivity : ComponentActivity() {
         val message = buildString {
             append("Computer: ${host.name}\n")
             append("Addresses: ${host.addresses.joinToString(", ")}\n")
-            host.btAddress?.let { append("Bluetooth: $it\n") }
+            if (BLUETOOTH) host.btAddress?.let { append("Bluetooth: $it\n") }
             append("\nFingerprint: ${host.fingerprint}\n")
             append("It must match the code under the QR code on your computer.")
             if (replaces) {
@@ -363,7 +418,7 @@ class MainActivity : ComponentActivity() {
         render()
         // The computer has Bluetooth: allow it, so the keyboard keeps
         // working off Wi-Fi. Declining only loses that fallback.
-        if (host.btAddress != null && !bluetoothGranted()) {
+        if (BLUETOOTH && host.btAddress != null && !bluetoothGranted()) {
             pendingOpen = host.hostId
             pendingNeedsBluetooth = false
             bluetoothPermission.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
