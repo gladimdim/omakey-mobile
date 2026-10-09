@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import com.gladimdim.omakey.protocol.Hid
 import com.gladimdim.omakey.protocol.KeyState
@@ -59,6 +60,10 @@ class BluetoothHidLink(
     private var repeats: ScheduledFuture<*>? = null
     private var registerAttempts = 0
     private var state: Link.State? = null
+    /** When the last pointer report went out (uptime ms); guarded by [reports]. */
+    private var pointerSentAt = 0L
+    /** A send of the motion held back by [POINTER_MS] is scheduled. */
+    @Volatile private var pointerFlush = false
 
     override val features get() = Wire.FEATURE_POINTER
     override val transport get() = "Bluetooth keyboard"
@@ -96,15 +101,31 @@ class BluetoothHidLink(
         device = null
     }
 
+    /**
+     * Keys and buttons go out at once. Pointer motion goes out at most every
+     * [POINTER_MS]: the touchpad moves at the digitizer's rate (120 Hz and
+     * up), faster than the link carries reports while Android keeps it in
+     * sniff mode, and the backlog would make the cursor trail the finger.
+     * Motion in between adds up in [keys] and leaves with the next report.
+     */
     override fun send() {
         val h = hid ?: return
         val d = device ?: return
+        var wait = 0L
         val repeat = synchronized(reports) {
+            val now = SystemClock.uptimeMillis()
+            wait = pointerSentAt + POINTER_MS - now
+            val pointer = if (wait <= 0) keys.takePointer() else null
+            if (pointer != null) pointerSentAt = now
             try {
-                reports.build(keys.held(), keys.takePointer()) { id, data -> h.sendReport(d, id, data) } || reports.behind
+                reports.build(keys.held(), pointer) { id, data -> h.sendReport(d, id, data) } || reports.behind
             } catch (e: SecurityException) {
                 false
             }
+        }
+        if (wait > 0 && !pointerFlush) {
+            pointerFlush = true
+            if (schedule(wait) { pointerFlush = false; send() } == null) pointerFlush = false
         }
         if (repeat) later { scheduleRepeats() }
     }
@@ -266,5 +287,7 @@ class BluetoothHidLink(
     companion object {
         private const val TAG = "omakey"
         const val RETRY_MS = 4000L
+        /** At most one pointer report per this long, about one per sniff interval (11.25 ms). */
+        const val POINTER_MS = 12L
     }
 }
