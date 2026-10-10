@@ -45,7 +45,7 @@ It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey
 
 | Directory  | Status |
 |------------|--------|
-| `android/` | Released ([1.3.0](https://github.com/gladimdim/omakey-mobile/releases/latest)): QR pairing and discovery over Wi-Fi, ten layouts and layout import, touchpad, portrait mode, shared clipboard |
+| `android/` | Released ([1.4.0](https://github.com/gladimdim/omakey-mobile/releases/latest)): QR pairing and discovery over Wi-Fi, ten layouts and layout import, touchpad, portrait mode, shared clipboard, Wake on LAN |
 | `ios/`     | Planned (M3): SwiftUI + UIView keyboard, Network.framework, CryptoKit |
 
 It connects to **omakeyd** (Omarchy, or a Steam Deck with SteamOS) over
