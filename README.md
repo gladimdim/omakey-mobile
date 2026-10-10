@@ -36,6 +36,8 @@ It is free to use and redistribute. Website: <https://gladimdim.github.io/omakey
   packet carries every held key.
 - **Shared clipboard and lock lights.** Copy and paste between the phone
   and the desktop; Caps, Num and Scroll Lock show on the phone.
+- **Wake on LAN.** Open a computer that's asleep and the phone wakes it,
+  once Wake on LAN is on on the computer.
 
 <p align="center">
   <img src="artwork/layouts.png" alt="The ten built-in layouts: Classic QWERTY, Omakey Pro, Classic Colemak, Classic Dvorak, Corne, Lily58, Ferris Sweep, ErgoDox, Alice and Kinesis Advantage" width="900">
@@ -72,6 +74,7 @@ android/
     ClientSession.kt  socket-free client state machine
     KeyState.kt       held set (ascending, ref-counted) + un-acked event queue
     Pairing.kt        omakey://pair link parser, HostRecord, hex
+    WakeOnLan.kt      the Wake-on-LAN magic packet and broadcast address
     Hid.kt            Bluetooth keyboard mode: HID descriptor, Linux code → usage, reports
   protocol/src/test/  ProtocolTest, TestVectorsTest, HidTest (+ resources/test-vectors.json)
   app/src/main/java/com/gladimdim/omakey/
@@ -85,6 +88,7 @@ android/
     net/FallbackLink.kt        Wi-Fi first, Bluetooth when Wi-Fi doesn't answer
     net/BluetoothHidLink.kt    the phone as a Bluetooth HID keyboard and mouse
     net/Discovery.kt           NsdManager browse/resolve of _omakey._udp
+    net/Waker.kt               sends Wake-on-LAN packets over Wi-Fi
     store/Stores.kt            paired hosts, Bluetooth keyboard hosts, layouts
     ui/MainActivity.kt         connect screen, pairing, imports, deep links
     ui/KeyboardActivity.kt     fullscreen keyboard, Wi-Fi lock, status pill
@@ -128,6 +132,15 @@ scripts/sync-spec.sh            # defaults to ../omakey-layout-studio
    your typing.
 3. Next time, tap the computer under **Select computer to use**. If its IP changed, the
    app finds it again over mDNS by its host id.
+
+**Wake on LAN.** Turn it on on the computer first: in the Omakey bar
+widget's Settings, or with `omakeyd wake-on-lan on`. The phone learns the
+computer's network card the next time it connects. After that, a computer
+that doesn't answer within a moment of opening it gets a Wake-on-LAN
+packet, and a few more while it wakes up. The status line then says
+*Waking…*, and the keyboard connects once the computer is up. It works from the same Wi-Fi only.
+Over Wi-Fi a computer wakes from sleep but not from power-off. Over Ethernet
+it can wake from power-off too. You can turn it off in the app's Settings → *Wake on LAN*.
 
 Long-press a paired computer to forget it. **Layout** picks the active layout,
 shares one (as an `omakey://layout` link, or the JSON when it's large) or

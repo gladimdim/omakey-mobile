@@ -220,6 +220,7 @@ class MainActivity : ComponentActivity() {
             pairedList.addView(text("No computers yet.", 14f, Palette.FG_DIM))
         }
         reach.update(paired, nearby)
+        val wakeOnLan = AppSettings(this).wakeOnLan
         for (h in paired) {
             val answered = online[h.hostId]
             val address = answered?.address?.hostAddress ?: nearbyById[h.hostId]?.address?.address?.hostAddress ?: h.addresses.first()
@@ -227,6 +228,7 @@ class MainActivity : ComponentActivity() {
                 answered != null -> "● Online · $address"
                 h.hostId !in online -> "Checking… · $address"
                 BLUETOOTH && h.btAddress != null -> "○ Not on this Wi-Fi · will try Bluetooth"
+                h.wakeMac != null && wakeOnLan -> "○ Asleep or off · opening it wakes it"
                 else -> "○ Offline · $address"
             }
             val color = if (answered != null) Palette.OK else Palette.FG_DIM

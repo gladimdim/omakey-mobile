@@ -21,6 +21,8 @@ class ClientSession(
             val features: Int = 0,
             /** Where to reach the computer over Bluetooth, "AA:BB:…"; null without Bluetooth. */
             val btAddress: String? = null,
+            /** The network card to wake, "e8:8d:…"; null while the computer doesn't wake on LAN. */
+            val wakeMac: String? = null,
         ) : Result
         /**
          * [leds]: the computer's lock lights ([Ack.LED_CAPS], …), or null when it doesn't say.
@@ -127,7 +129,9 @@ class ClientSession(
         recvCounter = 0
         connected = true
         keys.resetSession()
-        return Result.Connected(w.name, w.sessionId, w.features, w.btAddress?.let(PairingUri::btAddress))
+        return Result.Connected(
+            w.name, w.sessionId, w.features, w.btAddress?.let(PairingUri::btAddress), w.wakeMac?.let(WakeOnLan::macText),
+        )
     }
 
     private fun onAck(p: Packet, nowMs: Int): Result? {

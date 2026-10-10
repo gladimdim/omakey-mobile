@@ -88,6 +88,7 @@ class SettingsActivity : Activity() {
 
         list.addView(section("COMPUTERS"))
         renderComputers()
+        list.addView(wakeOnLanRow())
 
         list.addView(section("KEYBOARD"))
         list.addView(typedTextRow())
@@ -174,7 +175,8 @@ class SettingsActivity : Activity() {
             return
         }
         for (h in paired) {
-            val via = if (BLUETOOTH && h.btAddress != null) "Omakey · Wi-Fi + Bluetooth" else "Omakey · Wi-Fi"
+            val via = (if (BLUETOOTH && h.btAddress != null) "Omakey · Wi-Fi + Bluetooth" else "Omakey · Wi-Fi") +
+                if (h.wakeMac != null) " · Wake on LAN" else ""
             list.addView(computerRow(h.name, via, h.addresses.first()) { confirmUnlink(h, hosts, ::render) })
         }
         for (b in bt) {
@@ -219,6 +221,13 @@ class SettingsActivity : Activity() {
         // Turned on: a click to feel what it's like.
         if (on) Haptics(this).tap()
     }
+
+    private fun wakeOnLanRow() = toggleRow(
+        "Wake on LAN",
+        "Opening a computer that's asleep wakes it, from the same Wi-Fi. Turn it on on the computer first: " +
+            "Omakey's Settings in the bar, or omakeyd wake-on-lan on.",
+        { settings.wakeOnLan },
+    ) { settings.wakeOnLan = it }
 
     private fun typedTextRow() = toggleRow(
         "Show typed text", "What you type runs along above the keyboard. Turn it off for passwords on a shared screen.",

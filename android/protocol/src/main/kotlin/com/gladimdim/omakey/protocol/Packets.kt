@@ -8,6 +8,8 @@ object Wire {
     const val FEATURE_POINTER = 1
     /** WELCOME feature bit: the server takes CLIP, for the clipboard. */
     const val FEATURE_CLIPBOARD = 2
+    /** WELCOME feature bit: the computer wakes on a Wake-on-LAN packet to [Welcome.wakeMac]. */
+    const val FEATURE_WAKE = 4
     /** Length of the INPUT pointer trailer after its length byte. */
     const val POINTER_LEN = 8
     const val BTN_LEFT = 0x110
@@ -129,13 +131,19 @@ class Welcome(
     val features: Int = 0,
     /** The server's Bluetooth adapter, 6 bytes; null when it has none. */
     val btAddress: ByteArray? = null,
+    /**
+     * The network card to wake, 6 bytes, with [Wire.FEATURE_WAKE]; null
+     * while the computer doesn't wake on LAN.
+     */
+    val wakeMac: ByteArray? = null,
 ) {
     fun encode(): ByteArray {
         val nameBytes = truncateUtf8(name, 255)
-        val bt = btAddress ?: ByteArray(0)
-        return ByteBuffer.allocate(Wire.RANDOM_LEN * 2 + 4 + 1 + nameBytes.size + 1 + bt.size)
+        // With a MAC, zeros hold the Bluetooth address's place.
+        val tail = if (wakeMac != null) (btAddress ?: ByteArray(6)) + wakeMac else btAddress ?: ByteArray(0)
+        return ByteBuffer.allocate(Wire.RANDOM_LEN * 2 + 4 + 1 + nameBytes.size + 1 + tail.size)
             .put(clientRandom).put(serverRandom).putInt(sessionId)
-            .put(nameBytes.size.toByte()).put(nameBytes).put(features.toByte()).put(bt).array()
+            .put(nameBytes.size.toByte()).put(nameBytes).put(features.toByte()).put(tail).array()
     }
 
     companion object {
@@ -146,8 +154,9 @@ class Welcome(
             val sid = buf.int
             val n = ByteArray(buf.get().toInt() and 0xFF).also { buf.get(it) }
             val features = if (buf.hasRemaining()) buf.get().toInt() and 0xFF else 0
-            val bt = if (buf.remaining() >= 6) ByteArray(6).also { buf.get(it) } else null
-            Welcome(cr, sr, sid, String(n, Charsets.UTF_8), features, bt)
+            val bt = if (buf.remaining() >= 6) ByteArray(6).also { buf.get(it) }.takeIf { b -> b.any { it != 0.toByte() } } else null
+            val wake = if (features and Wire.FEATURE_WAKE != 0 && buf.remaining() >= 6) ByteArray(6).also { buf.get(it) } else null
+            Welcome(cr, sr, sid, String(n, Charsets.UTF_8), features, bt, wake)
         } catch (e: RuntimeException) {
             null
         }

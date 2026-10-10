@@ -19,6 +19,9 @@ interface WifiLink : Link {
 
     /** The computer's Bluetooth address from its WELCOME, if it has one. */
     val btAddress: String?
+
+    /** The network card to wake, from its WELCOME, while the computer wakes on LAN. */
+    val wakeMac: String? get() = null
 }
 
 /** Runs [FallbackLink]'s starts and stops in order, off the caller's thread. */
@@ -65,6 +68,9 @@ class FallbackLink(
 
     /** The Wi-Fi address that answered, to try first next time. */
     val peer: InetSocketAddress? get() = wifi.peer
+
+    /** What the computer said over Wi-Fi about waking it; see [WifiLink.wakeMac]. */
+    val wakeMac: String? get() = wifi.wakeMac
 
     override val features get() = current()?.features ?: 0
     override val transport get() = current()?.transport ?: wifi.transport

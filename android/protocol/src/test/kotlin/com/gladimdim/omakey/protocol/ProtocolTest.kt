@@ -273,6 +273,55 @@ class ProtocolTest {
     }
 
     @Test
+    fun wakeMacComesFromThePairingLinkAndWelcome() {
+        val link = "omakey://pair?v=1&h=0102030405060708&n=desk&a=192.168.1.5&p=47800" +
+            "&d=0909090909090909&k=" + Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32)) +
+            "&w=E88DA6E08993"
+        assertEquals("e8:8d:a6:e0:89:93", PairingUri.parse(link).wakeMac)
+        assertNull(PairingUri.parse(link.substringBefore("&w=")).wakeMac)
+
+        val mac = hex("e88da6e08993")
+        val plain = Welcome(ByteArray(16), ByteArray(16), 5, "desk", Wire.FEATURE_POINTER).encode()
+        // No Bluetooth: six zeros hold its place, and read back as none.
+        val noBt = Welcome(ByteArray(16), ByteArray(16), 5, "desk", Wire.FEATURE_POINTER or Wire.FEATURE_WAKE, null, mac).encode()
+        assertEquals(plain.size + 12, noBt.size)
+        Welcome.decode(noBt)!!.let {
+            assertNull(it.btAddress)
+            assertArrayEquals(mac, it.wakeMac)
+        }
+        val bt = hex("1418c368871e")
+        Welcome.decode(Welcome(ByteArray(16), ByteArray(16), 5, "desk", Wire.FEATURE_WAKE, bt, mac).encode())!!.let {
+            assertArrayEquals(bt, it.btAddress)
+            assertArrayEquals(mac, it.wakeMac)
+        }
+        // Without the feature bit the bytes after the Bluetooth address aren't a MAC.
+        val noBit = noBt.copyOf().also { it[plain.size - 1] = Wire.FEATURE_POINTER.toByte() }
+        assertNull(Welcome.decode(noBit)!!.wakeMac)
+    }
+
+    @Test
+    fun magicPacketIsSixFFsThenTheMacSixteenTimes() {
+        val mac = WakeOnLan.macBytes("e8:8d:a6:e0:89:93")!!
+        val p = WakeOnLan.magicPacket(mac)
+        assertEquals(102, p.size)
+        assertTrue(p.copyOf(6).all { it == 0xFF.toByte() })
+        for (i in 0 until 16) assertArrayEquals(mac, p.copyOfRange(6 + i * 6, 12 + i * 6))
+        assertNull(WakeOnLan.macBytes("e8:8d:a6"))
+        assertEquals("e8:8d:a6:e0:89:93", WakeOnLan.macText(mac))
+    }
+
+    @Test
+    fun broadcastAddressSetsTheHostBits() {
+        fun b(a: String, prefix: Int) = WakeOnLan.broadcast(java.net.InetAddress.getByName(a).address, prefix)
+            .joinToString(".") { (it.toInt() and 0xFF).toString() }
+        assertEquals("192.168.50.255", b("192.168.50.219", 24))
+        assertEquals("10.0.255.255", b("10.0.3.7", 16))
+        assertEquals("172.16.7.255", b("172.16.4.1", 22))
+        assertEquals("255.255.255.255", b("10.1.2.3", 0))
+        assertEquals("10.1.2.3", b("10.1.2.3", 32))
+    }
+
+    @Test
     fun ackCarriesLockLightsWhenTheServerSendsThem() {
         assertNull(Ack.decode(Ack(5, 7).encode())!!.leds)
         val a = Ack.decode(Ack(5, 7, Ack.LED_CAPS).encode())!!

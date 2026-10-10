@@ -14,6 +14,8 @@ data class HostRecord(
     val key: ByteArray,
     /** The computer's Bluetooth adapter, "AA:BB:CC:DD:EE:FF", for the Bluetooth fallback. */
     val btAddress: String? = null,
+    /** The computer's network card, "e8:8d:a6:e0:89:93", while it wakes on a Wake-on-LAN packet. */
+    val wakeMac: String? = null,
 ) {
     val deviceIdHex: String get() = Hex.encode(deviceId)
 
@@ -30,7 +32,7 @@ data class HostRecord(
         other is HostRecord && hostId == other.hostId && name == other.name &&
             addresses == other.addresses && port == other.port &&
             deviceId.contentEquals(other.deviceId) && key.contentEquals(other.key) &&
-            btAddress == other.btAddress
+            btAddress == other.btAddress && wakeMac == other.wakeMac
 
     override fun hashCode(): Int = hostId.hashCode()
 }
@@ -38,7 +40,7 @@ data class HostRecord(
 class PairingException(message: String) : Exception(message)
 
 /**
- * Parses `omakey://pair?v=1&h=<host id>&n=<name>&a=<ip>,<ip>&p=<port>&d=<device id>&k=<key>[&b=<bt address>]`.
+ * Parses `omakey://pair?v=1&h=<host id>&n=<name>&a=<ip>,<ip>&p=<port>&d=<device id>&k=<key>[&b=<bt address>][&w=<mac>]`.
  */
 object PairingUri {
     private val IPV4 = Regex("^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$")
@@ -67,8 +69,9 @@ object PairingUri {
         if (addresses.isEmpty()) throw PairingException("Pairing link has no addresses")
         val name = q["n"]?.takeIf { it.isNotBlank() } ?: hostId
         val bt = q["b"]?.takeIf { Hex.isHex(it, 6) }?.let { btAddress(Hex.decode(it)) }
+        val wake = q["w"]?.takeIf { Hex.isHex(it, 6) }?.let { WakeOnLan.macText(Hex.decode(it)) }
 
-        return HostRecord(hostId, name, addresses, port, deviceId, key, bt)
+        return HostRecord(hostId, name, addresses, port, deviceId, key, bt, wake)
     }
 
     /** Six address bytes as Android writes them: "AA:BB:CC:DD:EE:FF". */

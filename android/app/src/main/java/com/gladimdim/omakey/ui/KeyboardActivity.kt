@@ -42,6 +42,7 @@ import com.gladimdim.omakey.net.Discovery
 import com.gladimdim.omakey.net.FallbackLink
 import com.gladimdim.omakey.net.Found
 import com.gladimdim.omakey.net.Link
+import com.gladimdim.omakey.net.Waker
 import com.gladimdim.omakey.protocol.Ack
 import com.gladimdim.omakey.protocol.ClipTransfer
 import com.gladimdim.omakey.protocol.DesktopTheme
@@ -131,6 +132,25 @@ open class KeyboardActivity : Activity() {
         p.stop()
         parked = null
         parkedFor = null
+    }
+
+    /** Wake-on-LAN packets sent since [connect]; the status then says "Waking". */
+    private var wakesSent = 0
+    /**
+     * The computer doesn't answer: maybe it's asleep. Wake it, if it said it
+     * wakes on LAN, and again a few times while it still doesn't answer.
+     */
+    private val wake = object : Runnable {
+        override fun run() {
+            val t = target as? Target.Omakey ?: return
+            if (linkState == Link.State.CONNECTED || wakesSent >= WAKE_TRIES) return
+            val mac = hosts.get(t.host.hostId)?.wakeMac ?: return
+            if (!AppSettings(this@KeyboardActivity).wakeOnLan) return
+            Waker.wake(this@KeyboardActivity, mac)
+            wakesSent++
+            renderStatus()
+            handler.postDelayed(this, WAKE_EVERY_MS)
+        }
     }
 
     private val prefs by lazy { getSharedPreferences("keyboard", MODE_PRIVATE) }
@@ -590,6 +610,7 @@ open class KeyboardActivity : Activity() {
                 if (state == Link.State.CONNECTED) {
                     if (t is Target.Omakey && l.transport == "Wi-Fi") {
                         (l as FallbackLink).peer?.address?.hostAddress?.let { hosts.rememberAddress(t.host.hostId, it) }
+                        hosts.rememberWakeMac(t.host.hostId, (l as FallbackLink).wakeMac)
                     }
                     touchpad.supported = l.features and Wire.FEATURE_POINTER != 0
                 } else {
@@ -641,6 +662,9 @@ open class KeyboardActivity : Activity() {
         link = l
         l.start()
         routeCandidates()
+        handler.removeCallbacks(wake)
+        wakesSent = 0
+        if (t is Target.Omakey) handler.postDelayed(wake, WAKE_AFTER_MS)
     }
 
     /**
@@ -763,6 +787,7 @@ open class KeyboardActivity : Activity() {
     }
 
     override fun onStop() {
+        handler.removeCallbacks(wake)
         discovery?.stop()
         discovery = null
         val l = link
@@ -970,7 +995,8 @@ open class KeyboardActivity : Activity() {
         val (dot, color, msg) = when (linkState) {
             Link.State.CONNECTED ->
                 Triple("●", Palette.OK, hostName + via + if (pingMs >= 0) " · $pingMs ms" else "")
-            Link.State.CONNECTING -> Triple("●", Palette.WARN, "Connecting to $hostName…")
+            Link.State.CONNECTING ->
+                Triple("●", Palette.WARN, if (wakesSent > 0) "Waking $hostName…" else "Connecting to $hostName…")
             Link.State.REJECTED -> Triple("●", Palette.ERROR, "$hostName doesn't know this phone. Pair again.")
             Link.State.WAITING ->
                 Triple("●", Palette.WARN, "On the computer, open Bluetooth settings and pair with “${phoneName()}”")
@@ -998,6 +1024,14 @@ open class KeyboardActivity : Activity() {
         private const val REQ_LAYOUT = 3
         /** How long a Bluetooth keyboard stays connected after the screen goes off. */
         private const val PARK_MS = 20_000L
+        /**
+         * No answer this long after connecting: send a Wake-on-LAN packet. An
+         * awake computer answers within milliseconds; a slow Wi-Fi start
+         * can take a second, and isn't worth calling "Waking".
+         */
+        private const val WAKE_AFTER_MS = 2_000L
+        private const val WAKE_EVERY_MS = 5_000L
+        private const val WAKE_TRIES = 6
         private const val CUSTOM = "Custom"
         /** A swipe of the top bar faster than this throws the touchpad that way. */
         private const val FLICK_DP_PER_S = 400f

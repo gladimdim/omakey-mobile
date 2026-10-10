@@ -59,6 +59,9 @@ class KeyboardLink(
     @Volatile override var btAddress: String? = null
         private set
 
+    @Volatile override var wakeMac: String? = null
+        private set
+
     @Volatile override var peer: InetSocketAddress? = null
         private set
 
@@ -158,6 +161,8 @@ class KeyboardLink(
         setState(Link.State.CONNECTING)
 
         var nextHello = now()
+        // When this handshake began, for the log.
+        var connectingSince = nextHello
         var helloInterval = HELLO_FIRST_MS
         var lastHeard = 0L
         var lastPingReport = 0L
@@ -192,6 +197,8 @@ class KeyboardLink(
                         peer = null
                         helloInterval = HELLO_FIRST_MS
                         nextHello = now
+                        connectingSince = now
+                        Log.i(TAG, "no ACK for ${LOST_MS} ms; reconnecting")
                         setState(Link.State.CONNECTING)
                         continue
                     }
@@ -228,7 +235,9 @@ class KeyboardLink(
                         is ClientSession.Result.Connected -> {
                             features = r.features
                             btAddress = r.btAddress
+                            wakeMac = r.wakeMac
                             lastHeard = t
+                            Log.i(TAG, "connected to ${r.hostName} at $from in ${t - connectingSince} ms")
                             setState(Link.State.CONNECTED, r.hostName)
                         }
                         is ClientSession.Result.Acked -> {

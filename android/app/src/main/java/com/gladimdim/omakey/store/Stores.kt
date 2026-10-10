@@ -79,6 +79,14 @@ class HostStore(context: Context) {
     fun rememberBtAddress(hostId: String, address: String) =
         save(all().map { h -> if (h.hostId == hostId) h.copy(btAddress = address) else h })
 
+    /** The computer's network card to wake, from its WELCOME; null while it doesn't wake on LAN. */
+    @Synchronized
+    fun rememberWakeMac(hostId: String, mac: String?) {
+        val list = all()
+        if (list.none { it.hostId == hostId && it.wakeMac != mac }) return
+        save(list.map { h -> if (h.hostId == hostId) h.copy(wakeMac = mac) else h })
+    }
+
     private fun save(hosts: List<HostRecord>) {
         val arr = JSONArray()
         hosts.forEach { arr.put(toJson(it)) }
@@ -95,6 +103,7 @@ class HostStore(context: Context) {
             .put("port", h.port)
             .put("deviceId", Hex.encode(h.deviceId))
             .put("btAddress", h.btAddress)
+            .put("wakeMac", h.wakeMac)
         val wrapped = KeyWrap.wrap(h.key)
         // No Keystore (broken firmware): keep the key as before rather than lose the pairing.
         return if (wrapped != null) o.put("keyWrapped", wrapped) else o.put("key", Base64.getEncoder().encodeToString(h.key))
@@ -108,6 +117,7 @@ class HostStore(context: Context) {
             o.getString("hostId"), o.getString("name"), List(a.length()) { a.getString(it) },
             o.getInt("port"), Hex.decode(o.getString("deviceId")), key,
             o.optString("btAddress").takeIf { it.isNotEmpty() },
+            o.optString("wakeMac").takeIf { it.isNotEmpty() },
         )
     }
 
@@ -191,6 +201,11 @@ class AppSettings(context: Context) {
     var haptics: Boolean
         get() = prefs.getBoolean("haptics", true)
         set(value) = prefs.edit().putBoolean("haptics", value).apply()
+
+    /** Wake a computer that doesn't answer with a Wake-on-LAN packet. On unless turned off. */
+    var wakeOnLan: Boolean
+        get() = prefs.getBoolean("wakeOnLan", true)
+        set(value) = prefs.edit().putBoolean("wakeOnLan", value).apply()
 
     companion object {
         const val DEFAULT_THEME = "tokyo-night"
